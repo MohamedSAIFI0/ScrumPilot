@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Phone, MapPin, Clock, Send } from 'lucide-react';
+import { Mail, Phone, MapPin, Clock, Send, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 const Contact: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -13,17 +13,95 @@ const Contact: React.FC = () => {
     serviceType: 'consultation'
   });
 
+  const [submitStatus, setSubmitStatus] = useState<{
+    loading: boolean;
+    success: boolean;
+    error: string | null;
+  }>({
+    loading: false,
+    success: false,
+    error: null
+  });
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    
+    // Reset status when user starts typing
+    if (submitStatus.success || submitStatus.error) {
+      setSubmitStatus(prev => ({ ...prev, success: false, error: null }));
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Contact form submitted:', formData);
+  const handleSubmit = async () => {
+    // Basic form validation
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.company || !formData.subject || !formData.message) {
+      setSubmitStatus({ 
+        loading: false, 
+        success: false, 
+        error: 'Veuillez remplir tous les champs obligatoires' 
+      });
+      return;
+    }
+    
+    setSubmitStatus({ loading: true, success: false, error: null });
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/contact/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          email: formData.email,
+          company: formData.company,
+          phone: formData.phone,
+          subject: formData.subject,
+          message: formData.message,
+          service_type: formData.serviceType
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erreur lors de l\'envoi du formulaire');
+      }
+
+      const result = await response.json();
+      console.log('Form submitted successfully:', result);
+
+      setSubmitStatus({ loading: false, success: true, error: null });
+      
+      // Reset form after successful submission
+      setFormData({
+        firstName: '',
+        lastName: '',
+        email: '',
+        company: '',
+        phone: '',
+        subject: '',
+        message: '',
+        serviceType: 'consultation'
+      });
+
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setSubmitStatus(prev => ({ ...prev, success: false }));
+      }, 5000);
+
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      setSubmitStatus({ 
+        loading: false, 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Une erreur est survenue lors de l\'envoi du formulaire' 
+      });
+    }
   };
 
   return (
@@ -54,7 +132,27 @@ const Contact: React.FC = () => {
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Success Message */}
+              {submitStatus.success && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-2xl flex items-center space-x-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <p className="text-green-800 font-open-sans">
+                    Votre message a été envoyé avec succès ! Nous vous recontacterons bientôt.
+                  </p>
+                </div>
+              )}
+
+              {/* Error Message */}
+              {submitStatus.error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center space-x-3">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <p className="text-red-800 font-open-sans">
+                    {submitStatus.error}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-6">
                 {/* Name Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -66,7 +164,8 @@ const Contact: React.FC = () => {
                       name="firstName"
                       value={formData.firstName}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans"
+                      disabled={submitStatus.loading}
+                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans disabled:opacity-50 disabled:cursor-not-allowed"
                       required
                     />
                   </div>
@@ -79,7 +178,8 @@ const Contact: React.FC = () => {
                       name="lastName"
                       value={formData.lastName}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans"
+                      disabled={submitStatus.loading}
+                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans disabled:opacity-50 disabled:cursor-not-allowed"
                       required
                     />
                   </div>
@@ -96,7 +196,8 @@ const Contact: React.FC = () => {
                       name="email"
                       value={formData.email}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans"
+                      disabled={submitStatus.loading}
+                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans disabled:opacity-50 disabled:cursor-not-allowed"
                       required
                     />
                   </div>
@@ -109,7 +210,8 @@ const Contact: React.FC = () => {
                       name="company"
                       value={formData.company}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans"
+                      disabled={submitStatus.loading}
+                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans disabled:opacity-50 disabled:cursor-not-allowed"
                       required
                     />
                   </div>
@@ -126,7 +228,8 @@ const Contact: React.FC = () => {
                       name="phone"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans"
+                      disabled={submitStatus.loading}
+                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -137,7 +240,8 @@ const Contact: React.FC = () => {
                       name="serviceType"
                       value={formData.serviceType}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans"
+                      disabled={submitStatus.loading}
+                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="consultation">Consultation gratuite</option>
                       <option value="demo">Démonstration produit</option>
@@ -158,8 +262,9 @@ const Contact: React.FC = () => {
                     name="subject"
                     value={formData.subject}
                     onChange={handleInputChange}
+                    disabled={submitStatus.loading}
                     placeholder="Ex: Implémentation Scrum IA pour équipe de 20 développeurs"
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans"
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 font-open-sans disabled:opacity-50 disabled:cursor-not-allowed"
                     required
                   />
                 </div>
@@ -173,22 +278,34 @@ const Contact: React.FC = () => {
                     name="message"
                     value={formData.message}
                     onChange={handleInputChange}
+                    disabled={submitStatus.loading}
                     rows={5}
                     placeholder="Décrivez votre projet, vos défis actuels et vos objectifs..."
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 resize-none font-open-sans"
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 text-secondary-2 resize-none font-open-sans disabled:opacity-50 disabled:cursor-not-allowed"
                     required
                   />
                 </div>
 
                 {/* Submit Button */}
                 <button
-                  type="submit"
-                  className="w-full bg-button text-white py-4 rounded-2xl font-semibold hover:bg-button/90 focus:outline-none focus:ring-2 focus:ring-button focus:ring-offset-2 transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 font-poppins"
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitStatus.loading}
+                  className="w-full bg-button text-white py-4 rounded-2xl font-semibold hover:bg-button/90 focus:outline-none focus:ring-2 focus:ring-button focus:ring-offset-2 transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 font-poppins disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
-                  <Send className="w-5 h-5" />
-                  <span>Envoyer le Message</span>
+                  {submitStatus.loading ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span>Envoi en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      <span>Envoyer le Message</span>
+                    </>
+                  )}
                 </button>
-              </form>
+              </div>
             </div>
 
             {/* Contact Information */}
@@ -252,14 +369,11 @@ const Contact: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              
             </div>
           </div>
         </div>
       </section>
 
-     
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-r from-primary to-button text-white">
         <div className="max-w-4xl mx-auto text-center px-6">

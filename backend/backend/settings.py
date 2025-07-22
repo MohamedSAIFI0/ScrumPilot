@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'userstory',
     'dev',
     'profil',
+    'contact',
 ]
 
 MIDDLEWARE = [

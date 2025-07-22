@@ -21,6 +21,7 @@ const menuItems = [
   { id: 'team', label: 'Creation equipes', icon: Users },
   { id: 'teams', label: 'Gestion equipes', icon: Users },
   { id: 'messaging', label: 'Messagerie', icon: MessageSquare },
+  { id: 'contact', label: 'Contact ', icon: MessageSquare },
   { id: 'settings', label: 'Paramètres', icon: Settings },
 ];
 

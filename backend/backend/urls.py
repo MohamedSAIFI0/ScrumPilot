@@ -33,4 +33,5 @@ urlpatterns = [
     path('api/',include('product_owner.urls')),
     path('api/',include('client.urls')),
     path('api/',include('dev.urls')),
+    path('api/',include('contact.urls')),
 ]

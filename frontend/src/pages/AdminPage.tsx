@@ -7,6 +7,7 @@ import { GeneralSettings } from '../admin/components/settings/GeneralSetting';
 import { useTheme } from '../admin/hooks/useTheme';
 import TeamManager from '../admin/components/Groups/TeamManagement';
 import TeamDisplay from '../admin/components/Groups/Teams';
+import ContactCardsManager from '../admin/components/Contact/Contact';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -24,6 +25,8 @@ function App() {
         return <TeamDisplay/>;
       case 'messaging':
         return <Messaging />;
+      case 'contact':
+        return <ContactCardsManager />;
       case 'settings':
         return <GeneralSettings />;
       default:
