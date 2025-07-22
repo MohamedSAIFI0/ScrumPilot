@@ -23,6 +23,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     {id: 'epic', label: 'Epic', icon: List},
     { id: 'backlog', label: 'Backlog', icon: List },
     { id: 'team', label: 'Équipe', icon: Users },
+    { id: 'blocage', label: 'Blocage', icon: Users },
+    { id: 'retrospective', label: 'Retrospectives', icon: Users },
     { id: 'feedback', label: 'Feedbacks', icon: MessageSquare },
     { id: 'reports', label: 'Rapports', icon: BarChart3 },
   ];

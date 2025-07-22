@@ -12,7 +12,8 @@ import EpicManagement from '../scrum_master/components/Epic/EpicManagement';
 import AIAssistant from '../scrum_master/components/AI/AIAssistant';
 import SprintManagement from '../scrum_master/components/Sprints/SprintManagement';
 import BacklogManagement from '../scrum_master/components/Backlog/BacklogManagement';
-
+import BlocageList from '../scrum_master/components/Blocage/Blocage';
+import RetrospectivesDashboard from '../scrum_master/components/Retrospective/Retrospective';
 function ScrumMasterPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -30,6 +31,10 @@ function ScrumMasterPage() {
         return <BacklogManagement />;
       case 'team':
         return <Team />;
+      case 'blocage':
+        return <BlocageList />;
+      case 'retrospective':
+        return <RetrospectivesDashboard/>
       case 'feedback':
         return <ClientFeedback />;
       case 'reports':
