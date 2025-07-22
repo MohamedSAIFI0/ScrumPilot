@@ -1,42 +1,107 @@
-import React from 'react';
-import { Folder, Users, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Folder, Users, Calendar, Loader } from 'lucide-react';
+
+interface Project {
+  id?: number;
+  name: string;
+  team: string;
+  members: number;
+  deadline: string;
+  progress: number;
+  status: string;
+}
 
 const ActiveProjects: React.FC = () => {
-  const projects = [
-    {
-      name: 'E-Commerce Platform',
-      team: 'Team Alpha',
-      members: 8,
-      deadline: '2025-03-15',
-      progress: 75,
-      status: 'En cours'
-    },
-    {
-      name: 'Mobile App Redesign',
-      team: 'Team Beta',
-      members: 6,
-      deadline: '2025-02-28',
-      progress: 45,
-      status: 'Planification'
-    },
-    {
-      name: 'Data Analytics Dashboard',
-      team: 'Team Gamma',
-      members: 5,
-      deadline: '2025-04-10',
-      progress: 90,
-      status: 'Tests'
-    }
-  ];
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await fetch('http://127.0.0.1:8000/api/projects/');
+        
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setProjects(data);
+      } catch (err) {
+        console.error('Erreur lors du chargement des projets:', err);
+        setError('Impossible de charger les projets. Vérifiez que l\'API est accessible.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'En cours': return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300';
-      case 'Planification': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300';
-      case 'Tests': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300';
+    switch (status.toLowerCase()) {
+      case 'en cours': return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300';
+      case 'planification': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300';
+      case 'tests': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300';
+      case 'terminé': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300';
+      case 'suspendu': return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300';
       default: return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
     }
   };
+
+  if (loading) {
+    return (
+      <div className="bg-white dark:bg-dark-surface p-6 rounded-xl shadow-sm transition-colors duration-200">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-semibold text-secondary-2 dark:text-dark-text font-poppins">Projets Actifs</h3>
+          <Folder className="h-5 w-5 text-primary" />
+        </div>
+        <div className="flex items-center justify-center py-8">
+          <Loader className="h-6 w-6 text-primary animate-spin" />
+          <span className="ml-2 text-gray-600 dark:text-gray-400">Chargement des projets...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white dark:bg-dark-surface p-6 rounded-xl shadow-sm transition-colors duration-200">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-semibold text-secondary-2 dark:text-dark-text font-poppins">Projets Actifs</h3>
+          <Folder className="h-5 w-5 text-primary" />
+        </div>
+        <div className="text-center py-8">
+          <div className="text-red-600 dark:text-red-400 mb-2">⚠️ Erreur</div>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Réessayer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="bg-white dark:bg-dark-surface p-6 rounded-xl shadow-sm transition-colors duration-200">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-semibold text-secondary-2 dark:text-dark-text font-poppins">Projets Actifs</h3>
+          <Folder className="h-5 w-5 text-primary" />
+        </div>
+        <div className="text-center py-8">
+          <Folder className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Aucun projet trouvé</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white dark:bg-dark-surface p-6 rounded-xl shadow-sm transition-colors duration-200">
@@ -47,7 +112,7 @@ const ActiveProjects: React.FC = () => {
       
       <div className="space-y-4">
         {projects.map((project, index) => (
-          <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-sm transition-all duration-200">
+          <div key={project.id || index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-sm transition-all duration-200">
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-medium text-secondary-2 dark:text-dark-text">{project.name}</h4>
               <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(project.status)}`}>

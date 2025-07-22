@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Layout } from '../admin/components/layout/Layout';
 import { Dashboard } from '../admin/components/dashboard/Dashboard';
 import { UserManagement } from '../admin/components/users/UserManagement';
-import { PermissionManagement } from '../admin/components/permissions/PermissionManagement';
 import { Messaging } from '../admin/components/messaging/Messaging';
 import { GeneralSettings } from '../admin/components/settings/GeneralSetting';
 import { useTheme } from '../admin/hooks/useTheme';
+import TeamManager from '../admin/components/Groups/TeamManagement';
+import TeamDisplay from '../admin/components/Groups/Teams';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -17,6 +18,10 @@ function App() {
         return <Dashboard />;
       case 'users':
         return <UserManagement />;
+      case 'team':
+        return <TeamManager/>;
+      case 'teams':
+        return <TeamDisplay/>;
       case 'messaging':
         return <Messaging />;
       case 'settings':

@@ -1,8 +1,6 @@
 import React from 'react';
 import MetricsCards from './MetricsCards';
-import SprintProgress from './SprintProgress';
 import RecentActivity from './RecentActivity';
-import TeamVelocity from './TeamVelocity';
 import ActiveProjects from './ActiveProjects';
 
 const Dashboard: React.FC = () => {
@@ -18,8 +16,6 @@ const Dashboard: React.FC = () => {
       <MetricsCards />
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SprintProgress />
-        <TeamVelocity />
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

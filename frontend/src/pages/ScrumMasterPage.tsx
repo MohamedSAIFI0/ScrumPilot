@@ -4,7 +4,7 @@ import Sidebar from '../scrum_master/components/Layout/Sidebar';
 import Header from '../scrum_master/components/Layout/Header';
 import Dashboard from '../scrum_master/components/Dashboard/Dashboard';
 import Projects from '../scrum_master/components/Projects/Projects';
-import Team from '../scrum_master/components/Team/Team';
+import TeamDisplay from '../scrum_master/components/Team/Team';
 import ClientFeedback from '../scrum_master/components/Feedback/ClientFeedback';
 import Reports from '../scrum_master/components/Reports/Reports';
 import Settings from '../scrum_master/components/Settings/Settings';
@@ -30,7 +30,7 @@ function ScrumMasterPage() {
       case 'backlog':
         return <BacklogManagement />;
       case 'team':
-        return <Team />;
+        return <TeamDisplay />;
       case 'blocage':
         return <BlocageList />;
       case 'retrospective':

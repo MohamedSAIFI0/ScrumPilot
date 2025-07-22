@@ -18,6 +18,8 @@ interface SidebarProps {
 const menuItems = [
   { id: 'dashboard', label: 'Tableau de bord', icon: BarChart3 },
   { id: 'users', label: 'Gestion utilisateurs', icon: Users },
+  { id: 'team', label: 'Creation equipes', icon: Users },
+  { id: 'teams', label: 'Gestion equipes', icon: Users },
   { id: 'messaging', label: 'Messagerie', icon: MessageSquare },
   { id: 'settings', label: 'Paramètres', icon: Settings },
 ];
