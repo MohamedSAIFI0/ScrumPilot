@@ -21,7 +21,7 @@ class ConversationListView(APIView):
 
     def get(self, request):
         conversations = Conversation.objects.filter(
-            participants=request.user
+            conversationparticipant__user=request.user
         ).prefetch_related('participants', 'messages').distinct()
         
         serializer = ConversationSerializer(
@@ -88,10 +88,12 @@ class ConversationDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, conversation_id):
+        # ✅ Correction : Utiliser la jointure avec ConversationParticipant
         conversation = get_object_or_404(
-            Conversation,
-            id=conversation_id,
-            participants=request.user
+            Conversation.objects.filter(
+                conversationparticipant__user=request.user
+            ),
+            id=conversation_id
         )
         
         # Marquer la conversation comme lue
@@ -132,10 +134,12 @@ class SendMessageView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, conversation_id):
+        # ✅ Correction : Utiliser la jointure avec ConversationParticipant
         conversation = get_object_or_404(
-            Conversation,
-            id=conversation_id,
-            participants=request.user
+            Conversation.objects.filter(
+                conversationparticipant__user=request.user
+            ),
+            id=conversation_id
         )
         
         serializer = CreateMessageSerializer(
@@ -216,8 +220,11 @@ class MessageReactionView(APIView):
                 'error': 'Type de réaction invalide'
             }, status=400)
         
-        # Vérifier si l'utilisateur peut voir ce message
-        if not message.conversation.participants.filter(id=request.user.id).exists():
+        # ✅ Correction : Vérifier l'accès avec ConversationParticipant
+        if not ConversationParticipant.objects.filter(
+            conversation=message.conversation,
+            user=request.user
+        ).exists():
             return Response({
                 'error': 'Accès non autorisé à ce message'
             }, status=403)
@@ -242,6 +249,15 @@ class MessageReactionView(APIView):
         message = get_object_or_404(Message, id=message_id)
         reaction_type = request.data.get('reaction')
         
+        # ✅ Correction : Vérifier l'accès avec ConversationParticipant
+        if not ConversationParticipant.objects.filter(
+            conversation=message.conversation,
+            user=request.user
+        ).exists():
+            return Response({
+                'error': 'Accès non autorisé à ce message'
+            }, status=403)
+        
         try:
             reaction = MessageReaction.objects.get(
                 message=message,
@@ -263,7 +279,13 @@ class AddParticipantView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, conversation_id):
-        conversation = get_object_or_404(Conversation, id=conversation_id)
+        # ✅ Correction : Utiliser la jointure avec ConversationParticipant
+        conversation = get_object_or_404(
+            Conversation.objects.filter(
+                conversationparticipant__user=request.user
+            ),
+            id=conversation_id
+        )
         
         # Vérifier si l'utilisateur est admin de la conversation
         participant = get_object_or_404(
@@ -311,7 +333,13 @@ class LeaveConversationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request, conversation_id):
-        conversation = get_object_or_404(Conversation, id=conversation_id)
+        # ✅ Correction : Utiliser la jointure avec ConversationParticipant
+        conversation = get_object_or_404(
+            Conversation.objects.filter(
+                conversationparticipant__user=request.user
+            ),
+            id=conversation_id
+        )
         
         try:
             participant = ConversationParticipant.objects.get(
@@ -389,10 +417,12 @@ class SearchUsersView(APIView):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def mark_conversation_read(request, conversation_id):
+    # ✅ Correction : Utiliser la jointure avec ConversationParticipant
     conversation = get_object_or_404(
-        Conversation,
-        id=conversation_id,
-        participants=request.user
+        Conversation.objects.filter(
+            conversationparticipant__user=request.user
+        ),
+        id=conversation_id
     )
     
     participant, created = ConversationParticipant.objects.get_or_create(
