@@ -1,11 +1,11 @@
 # Ignore Python bytecode
-**/__pycache__/
+**/__pycache__
 *.py[cod]
 
 # Ignore Django migrations except __init__.py
-**/migrations/
-**/migrations/*.py
-!**/migrations/__init__.py
+**/migrations
+**/migrations
+!**/migrations
 
 # Ignore virtual environments (optional, if you have one)
 venv/
@@ -21,3 +21,6 @@ env/
 .vscode/
 .idea/
 *.swp
+
+
+node_modules/
