@@ -40,7 +40,7 @@ const API_BASE_URL = 'http://127.0.0.1:8000/api';
 // Hook pour les appels API
 const useApi = () => {
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('access_token'); 
+    const token = localStorage.getItem('access_token')
     return {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` })
@@ -120,7 +120,7 @@ const MessagingInterface: React.FC = () => {
           throw new Error('Format de réponse utilisateurs invalide');
         }
         
-        // Charger les conversations
+        // Charger les conversations après avoir défini les utilisateurs
         await loadConversations();
         
       } catch (error) {
@@ -134,22 +134,50 @@ const MessagingInterface: React.FC = () => {
     initializeData();
   }, []);
 
-  // Charger les conversations depuis l'API
-  const loadConversations = async () => {
+  // ✅ Fonction loadConversations améliorée avec enrichissement des participants
+  const loadConversations = async (): Promise<Conversation[]> => {
     try {
       const conversationsData = await apiCall('/chat/conversations/');
       
+      let conversationsList: Conversation[] = [];
+      
       if (Array.isArray(conversationsData)) {
-        setConversations(conversationsData);
+        conversationsList = conversationsData;
       } else if (conversationsData && conversationsData.conversations && Array.isArray(conversationsData.conversations)) {
-        setConversations(conversationsData.conversations);
+        conversationsList = conversationsData.conversations;
       } else {
-        console.warn('Aucune conversation trouvée');
-        setConversations([]);
+        console.warn('Format de réponse conversations inattendu:', conversationsData);
+        conversationsList = [];
       }
+      
+      // ✅ Enrichir les conversations avec les données complètes des utilisateurs
+      const enrichedConversations = conversationsList.map(conv => {
+        if (conv.participants && Array.isArray(conv.participants)) {
+          // Enrichir les données des participants avec les données complètes des utilisateurs
+          const enrichedParticipants = conv.participants.map(participant => {
+            const fullUserData = users.find(user => user.id === participant.id);
+            if (fullUserData) {
+              return { ...fullUserData, ...participant };
+            }
+            return participant;
+          });
+          
+          return {
+            ...conv,
+            participants: enrichedParticipants
+          };
+        }
+        return conv;
+      });
+      
+      console.log('Conversations chargées et enrichies:', enrichedConversations);
+      setConversations(enrichedConversations);
+      
+      return enrichedConversations;
     } catch (error) {
       console.error('Erreur lors du chargement des conversations:', error);
       setConversations([]);
+      return [];
     }
   };
 
@@ -162,9 +190,15 @@ const MessagingInterface: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Charger les messages d'une conversation
+  // ✅ Fonction loadMessages avec vérifications
   const loadMessages = async (conversationId: number) => {
+    if (!conversationId || conversationId === undefined) {
+      console.error('ID de conversation invalide:', conversationId);
+      return;
+    }
+    
     try {
+      console.log('Chargement des messages pour la conversation:', conversationId);
       const messagesData = await apiCall(`/chat/conversations/${conversationId}/`);
       
       if (messagesData && Array.isArray(messagesData.messages)) {
@@ -172,6 +206,7 @@ const MessagingInterface: React.FC = () => {
       } else if (messagesData && messagesData.data && Array.isArray(messagesData.data.messages)) {
         setMessages(messagesData.data.messages);
       } else {
+        console.log('Aucun message trouvé pour cette conversation');
         setMessages([]);
       }
     } catch (error) {
@@ -180,15 +215,33 @@ const MessagingInterface: React.FC = () => {
     }
   };
 
-  // Sélectionner une conversation
+  // ✅ Fonction selectConversation avec vérifications
   const selectConversation = (conversation: Conversation) => {
+    if (!conversation || !conversation.id) {
+      console.error('Conversation invalide:', conversation);
+      return;
+    }
+    
+    console.log('Sélection de la conversation:', conversation.id);
     setSelectedConversation(conversation);
-    loadMessages(conversation.id);
-    markAsRead(conversation.id);
+    
+    // Charger les messages uniquement si l'ID est valide
+    if (typeof conversation.id === 'number' && conversation.id > 0) {
+      loadMessages(conversation.id);
+      markAsRead(conversation.id);
+    } else {
+      // Pour les conversations temporaires, initialiser avec un tableau vide
+      setMessages([]);
+    }
   };
 
-  // Marquer une conversation comme lue
+  // ✅ Fonction markAsRead avec vérifications
   const markAsRead = async (conversationId: number) => {
+    if (!conversationId || conversationId === undefined) {
+      console.error('ID de conversation invalide pour markAsRead:', conversationId);
+      return;
+    }
+    
     try {
       await apiCall(`/chat/conversations/${conversationId}/read/`, {
         method: 'POST'
@@ -206,9 +259,15 @@ const MessagingInterface: React.FC = () => {
     }
   };
 
-  // Envoyer un message
+  // ✅ Fonction sendMessage avec vérifications
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation || !currentUser) return;
+    
+    if (!selectedConversation.id || selectedConversation.id === undefined) {
+      console.error('ID de conversation invalide pour l\'envoi de message:', selectedConversation);
+      setError('Erreur: conversation invalide');
+      return;
+    }
 
     const messageData = {
       content: newMessage,
@@ -216,6 +275,7 @@ const MessagingInterface: React.FC = () => {
     };
 
     try {
+      console.log('Envoi du message à la conversation:', selectedConversation.id);
       const response = await apiCall(`/chat/conversations/${selectedConversation.id}/messages/`, {
         method: 'POST',
         body: JSON.stringify(messageData)
@@ -223,11 +283,11 @@ const MessagingInterface: React.FC = () => {
 
       // Ajouter le message à la liste locale
       const newMsg: Message = {
-        id: response.id || Date.now(),
+        id: response.data?.id || response.id || Date.now(),
         sender: currentUser,
         content: newMessage,
         message_type: 'TEXT',
-        created_at: response.created_at || new Date().toISOString(),
+        created_at: response.data?.createdAt || response.created_at || new Date().toISOString(),
         is_edited: false,
         is_deleted: false
       };
@@ -245,6 +305,7 @@ const MessagingInterface: React.FC = () => {
       );
     } catch (error) {
       console.error('Erreur lors de l\'envoi du message:', error);
+      setError('Erreur lors de l\'envoi du message');
     }
   };
 
@@ -275,17 +336,19 @@ const MessagingInterface: React.FC = () => {
     }
   };
 
-  // Créer une conversation directe et l'ouvrir immédiatement
+  // ✅ Fonction corrigée pour créer une conversation directe
   const createDirectConversation = async (userId: number) => {
     if (isCreatingConversation) return;
     
     try {
       setIsCreatingConversation(true);
+      setError(null);
       
-      // Trouver l'utilisateur par son ID pour récupérer son email
+      // Trouver l'utilisateur par son ID pour récupérer ses informations complètes
       const targetUser = users.find(user => user.id === userId);
       if (!targetUser) {
         console.error('Utilisateur non trouvé');
+        setError('Utilisateur non trouvé');
         return;
       }
 
@@ -293,12 +356,23 @@ const MessagingInterface: React.FC = () => {
       const existingConversation = conversations.find(conv => 
         conv.type === 'DIRECT' && 
         conv.participants.some(p => p.id === userId) &&
-        conv.participants.length === 2 // Conversation directe = 2 participants
+        conv.participants.length === 2
       );
 
       if (existingConversation) {
-        // Ouvrir la conversation existante
-        selectConversation(existingConversation);
+        // S'assurer que la conversation existante a les bonnes données de participants
+        const updatedConversation = {
+          ...existingConversation,
+          participants: existingConversation.participants.map(p => {
+            if (p.id === userId) {
+              // S'assurer que les données de l'utilisateur sont complètes
+              return { ...targetUser, ...p };
+            }
+            return p;
+          })
+        };
+        
+        selectConversation(updatedConversation);
         setShowUserSearch(false);
         return;
       }
@@ -313,40 +387,75 @@ const MessagingInterface: React.FC = () => {
       
       console.log('Réponse de création de conversation:', response);
       
-      // Recharger les conversations
-      await loadConversations();
+      // ✅ Recharger les conversations pour obtenir la liste complète mise à jour
+      const updatedConversationsList = await loadConversations();
       
-      // Attendre un peu pour que les conversations soient chargées
-      setTimeout(() => {
-        // Trouver la nouvelle conversation dans la liste mise à jour
-        const newConversation = conversations.find(conv => 
-          conv.id === response.id || 
-          (conv.type === 'DIRECT' && conv.participants.some(p => p.id === userId))
-        );
-        
-        if (newConversation) {
-          console.log('Sélection de la nouvelle conversation:', newConversation);
-          selectConversation(newConversation);
-        } else {
-          // Si on ne trouve pas dans la liste existante, créer un objet temporaire
-          const tempConversation: Conversation = {
-            id: response.id,
-            type: 'DIRECT',
-            participants: [currentUser!, targetUser],
-            updated_at: new Date().toISOString(),
-            unread_count: 0
-          };
-          
-          console.log('Création d\'une conversation temporaire:', tempConversation);
-          setConversations(prev => [tempConversation, ...prev]);
-          selectConversation(tempConversation);
+      // ✅ Chercher la nouvelle conversation dans la liste mise à jour
+      let conversationToSelect = null;
+      
+      // Option 1: La conversation est retournée directement dans la réponse
+      if (response.conversation && response.conversation.id) {
+        conversationToSelect = response.conversation;
+        // S'assurer que les participants ont toutes leurs données
+        if (conversationToSelect.participants) {
+          conversationToSelect.participants = conversationToSelect.participants.map(p => {
+            if (p.id === userId) {
+              return { ...targetUser, ...p };
+            }
+            if (p.id === currentUser?.id) {
+              return { ...currentUser, ...p };
+            }
+            return p;
+          });
         }
-        
+      }
+      // Option 2: Chercher par ID dans la liste mise à jour
+      else if (response.id && updatedConversationsList) {
+        conversationToSelect = updatedConversationsList.find(conv => conv.id === response.id);
+      }
+      // Option 3: Chercher par participant dans la liste mise à jour
+      else if (updatedConversationsList) {
+        conversationToSelect = updatedConversationsList.find(conv => 
+          conv.type === 'DIRECT' && 
+          conv.participants.some(p => p.id === userId) &&
+          conv.participants.some(p => p.id === currentUser?.id) &&
+          conv.participants.length === 2
+        );
+      }
+      
+      if (conversationToSelect) {
+        console.log('Conversation trouvée, sélection:', conversationToSelect);
+        selectConversation(conversationToSelect);
         setShowUserSearch(false);
-      }, 500);
+      } else {
+        // ✅ Fallback: créer un objet conversation temporaire avec les bonnes données
+        console.warn('Conversation non trouvée dans la liste, création d\'un objet temporaire');
+        
+        const tempConversation: Conversation = {
+          id: response.id || response.conversation?.id || Date.now(),
+          type: 'DIRECT',
+          participants: [
+            currentUser!, // Utilisateur connecté avec toutes ses données
+            targetUser    // Utilisateur cible avec toutes ses données
+          ],
+          updated_at: new Date().toISOString(),
+          unread_count: 0
+        };
+        
+        // Ajouter la conversation temporaire à la liste
+        setConversations(prev => [tempConversation, ...prev]);
+        
+        // Sélectionner la conversation temporaire
+        setSelectedConversation(tempConversation);
+        setMessages([]);
+        setShowUserSearch(false);
+        
+        console.log('Conversation temporaire créée et sélectionnée:', tempConversation);
+      }
       
     } catch (error) {
       console.error('Erreur lors de la création de la conversation:', error);
+      setError('Erreur lors de la création de la conversation. Veuillez réessayer.');
     } finally {
       setIsCreatingConversation(false);
     }
@@ -378,17 +487,33 @@ const MessagingInterface: React.FC = () => {
         
         return conv.participants.some(p => 
           p.id !== currentUser?.id && 
+          p.name && 
           (p.name.toLowerCase().includes(query) || p.email.toLowerCase().includes(query))
         );
       })
     : [];
 
-  // Obtenir le nom d'affichage d'une conversation
+  // ✅ Fonction getConversationDisplayName corrigée avec validation robuste
   const getConversationDisplayName = (conversation: Conversation) => {
     if (conversation.name) return conversation.name;
     
     const otherParticipants = conversation.participants.filter(p => p.id !== currentUser?.id);
-    return otherParticipants.map(p => p.name).join(', ');
+    
+    // Vérification que les participants ont bien une propriété name
+    if (otherParticipants.length === 0) {
+      return 'Conversation';
+    }
+    
+    // S'assurer que chaque participant a un nom valide
+    const validNames = otherParticipants
+      .filter(p => p && p.name && typeof p.name === 'string')
+      .map(p => p.name);
+      
+    if (validNames.length === 0) {
+      return 'Utilisateur inconnu';
+    }
+    
+    return validNames.join(', ');
   };
 
   // Obtenir les autres participants (excluant l'utilisateur connecté)

@@ -3,6 +3,7 @@ import { Bell, LogOut, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useNotifications } from '../../hooks/useNotifications';
 import { NotificationDropdown } from '../notifications/NotificationDropdown';
+import {logout} from '../../../services/apiLogin'
 
 export const Header: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -57,7 +58,7 @@ export const Header: React.FC = () => {
             </div>
           </div>
           
-          <button className="p-2 text-gray-600 dark:text-gray-300 hover:text-red-500 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+          <button onClick={logout} className="p-2 text-gray-600 dark:text-gray-300 hover:text-red-500 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
             <LogOut size={20} />
           </button>
         </div>

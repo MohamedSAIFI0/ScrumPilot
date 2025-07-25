@@ -16,7 +16,7 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { mockUser } from '../data/mockData';
 import CalendarModal from './CalendarModal';
-
+import {logout} from '../../services/apiLogin';
 interface HeaderProps {
   onOpenMessaging: () => void;
   onToggleSidebar: () => void;
@@ -235,7 +235,7 @@ const Header: React.FC<HeaderProps> = ({ onOpenMessaging, onToggleSidebar, isSid
                   </div>
                   
                   <div className="border-t border-gray-200 dark:border-gray-700 py-2">
-                    <button className="w-full flex items-center px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    <button onClick={logout} className="w-full flex items-center px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                       <LogOut className="w-4 h-4 mr-3" />
                       Se Déconnecter
                     </button>

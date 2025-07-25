@@ -14,6 +14,9 @@ import SprintManagement from '../scrum_master/components/Sprints/SprintManagemen
 import BacklogManagement from '../scrum_master/components/Backlog/BacklogManagement';
 import BlocageList from '../scrum_master/components/Blocage/Blocage';
 import RetrospectivesDashboard from '../scrum_master/components/Retrospective/Retrospective';
+import MessagingInterface from '../admin/components/Messagerie/MessagingInterface';
+
+
 function ScrumMasterPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -39,6 +42,8 @@ function ScrumMasterPage() {
         return <ClientFeedback />;
       case 'reports':
         return <Reports />;
+        case 'Messagerie':
+          return <MessagingInterface />;
       case 'settings':
         return <Settings />;
       default:

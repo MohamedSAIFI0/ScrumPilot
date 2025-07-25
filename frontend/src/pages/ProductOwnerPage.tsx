@@ -14,10 +14,10 @@ import SprintManagement from '../scrum_master/components/Sprints/SprintManagemen
 import BacklogManagement from '../scrum_master/components/Backlog/BacklogManagement';
 
 import Dashboard from '../scrum_master/components/Dashboard/Dashboard';
+import MessagingInterface from '../admin/components/Messagerie/MessagingInterface';
 
 
 
-import MessagingInterface from '../dev_team/components/MessagingInterface';
 
 function AppContent() {
   const { state } = useScrum();

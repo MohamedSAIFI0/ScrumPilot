@@ -151,7 +151,6 @@ class CreateConversationSerializer(serializers.ModelSerializer):
                 
         return conversation
 
-
 class CreateDirectConversationSerializer(serializers.Serializer):
     recipient_email = serializers.EmailField()
 
@@ -174,6 +173,8 @@ class CreateDirectConversationSerializer(serializers.Serializer):
         ).filter(participants=recipient).first()
         
         if existing_conversation:
+            # ✅ Marquer que c'est une conversation existante
+            self._existing_conversation = True
             return existing_conversation
         
         # Créer une nouvelle conversation directe
@@ -192,9 +193,11 @@ class CreateDirectConversationSerializer(serializers.Serializer):
             user=recipient
         )
         
+        # ✅ Marquer que c'est une nouvelle conversation
+        self._existing_conversation = False
         return conversation
-
-
+    
+    
 class UpdateUserStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserStatus
