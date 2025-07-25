@@ -1,52 +1,67 @@
 import React, { useState } from 'react';
-import { Task, Comment } from '../types';
 import { 
   X, 
   Clock, 
-  AlertTriangle, 
   MessageCircle, 
-  Paperclip, 
   Send,
-  Plus,
   History
 } from 'lucide-react';
 import CommentSection from './CommentSection';
-import ImpedimentModal from './ImpedimentModal';
+
+// Types basés sur votre API
+interface UserStory {
+  id: number;
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  points: number;
+  status: 'todo' | 'in_progress' | 'testing' | 'done';
+  created_at: string;
+  updated_at: string;
+  epic: number;
+  sprint: number | null;
+  assignee: number[];
+  comments?: Comment[];
+}
+
+interface Comment {
+  id: string;
+  content: string;
+  author: {
+    id: number;
+    name: string;
+    avatar: string;
+  };
+  createdAt: Date;
+  mentions: string[];
+}
 
 interface TaskModalProps {
-  task: Task;
+  task: UserStory;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (taskId: string, updates: Partial<Task>) => void;
+  onSave: (taskId: number, updates: Partial<UserStory>) => void;
 }
 
 const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave }) => {
   const [status, setStatus] = useState(task.status);
   const [statusComment, setStatusComment] = useState('');
-  const [showImpedimentModal, setShowImpedimentModal] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleStatusChange = (newStatus: string) => {
-    setStatus(newStatus as 'todo' | 'inprogress' | 'done');
+  const handleStatusChange = async (newStatus: string) => {
+    setStatus(newStatus as 'todo' | 'in_progress' | 'testing' | 'done');
+    
+    // Sauvegarder le changement de statut
+    await onSave(task.id, {
+      status: newStatus as 'todo' | 'in_progress' | 'testing' | 'done'
+    });
+
+    // Si un commentaire est ajouté, on peut l'enregistrer séparément
     if (statusComment.trim()) {
-      onSave(task.id, {
-        status: newStatus as 'todo' | 'inprogress' | 'done',
-        statusHistory: [
-          ...task.statusHistory,
-          {
-            id: Date.now().toString(),
-            fromStatus: task.status,
-            toStatus: newStatus,
-            changedBy: task.assignee,
-            changedAt: new Date(),
-            comment: statusComment
-          }
-        ]
-      });
+      // Ici vous pouvez ajouter la logique pour sauvegarder le commentaire
+      // dans votre système de commentaires
       setStatusComment('');
-    } else {
-      onSave(task.id, { status: newStatus as 'todo' | 'inprogress' | 'done' });
     }
   };
 
@@ -60,212 +75,189 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave }) 
     }
   };
 
+  const getPriorityLabel = (priority: string) => {
+    switch (priority) {
+      case 'critical': return 'Critique';
+      case 'high': return 'Haute';
+      case 'medium': return 'Moyenne';
+      case 'low': return 'Basse';
+      default: return priority;
+    }
+  };
+
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'todo': return 'À Faire';
-      case 'inprogress': return 'En Cours';
+      case 'in_progress': return 'En Cours';
+      case 'testing': return 'En Test';
       case 'done': return 'Terminé';
       default: return status;
     }
   };
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
-    <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-xl font-poppins font-semibold text-secondary-2">
-                    {task.title}
-                  </h2>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                    {task.priority.toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 text-sm text-gray-600">
-                  <span className="flex items-center">
-                    <Clock className="w-4 h-4 mr-1" />
-                    {task.sprint}
-                  </span>
-                  <span>Assigné à {task.assignee.name}</span>
-                </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h2 className="text-xl font-poppins font-semibold text-secondary-2 dark:text-white">
+                  {task.title}
+                </h2>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+                  {getPriorityLabel(task.priority)}
+                </span>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
+                <span className="flex items-center">
+                  <Clock className="w-4 h-4 mr-1" />
+                  Sprint {task.sprint || 'Non assigné'}
+                </span>
+                <span>{task.points} points</span>
+                <span>Epic #{task.epic}</span>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Description */}
+          <div>
+            <h3 className="font-poppins font-medium mb-2 text-gray-900 dark:text-white">Description</h3>
+            <p className="text-gray-700 dark:text-gray-300 font-open-sans">{task.description}</p>
+          </div>
+
+          {/* Informations de création/modification */}
+          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="font-medium text-gray-900 dark:text-white">Créé le :</span>
+                <p className="text-gray-600 dark:text-gray-300">{formatDate(task.created_at)}</p>
+              </div>
+              <div>
+                <span className="font-medium text-gray-900 dark:text-white">Modifié le :</span>
+                <p className="text-gray-600 dark:text-gray-300">{formatDate(task.updated_at)}</p>
+              </div>
             </div>
           </div>
 
-          <div className="p-6 space-y-6">
-            {/* Description */}
-            <div>
-              <h3 className="font-poppins font-medium mb-2">Description</h3>
-              <p className="text-gray-700 font-open-sans">{task.description}</p>
-            </div>
-
-            {/* Tags */}
-            <div>
-              <h3 className="font-poppins font-medium mb-2">Étiquettes</h3>
+          {/* Status Update */}
+          <div className="bg-cards dark:bg-gray-700 p-4 rounded-lg">
+            <h3 className="font-poppins font-medium mb-3 text-gray-900 dark:text-white">Mise à jour du statut</h3>
+            <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                {task.tags.map((tag, index) => (
-                  <span 
-                    key={index}
-                    className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium"
-                  >
-                    #{tag}
-                  </span>
-                ))}
+                <button
+                  onClick={() => handleStatusChange('todo')}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                    status === 'todo' 
+                      ? 'bg-gray-500 text-white' 
+                      : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-500'
+                  }`}
+                >
+                  À Faire
+                </button>
+                <button
+                  onClick={() => handleStatusChange('in_progress')}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                    status === 'in_progress' 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-500'
+                  }`}
+                >
+                  En Cours
+                </button>
+                <button
+                  onClick={() => handleStatusChange('testing')}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                    status === 'testing' 
+                      ? 'bg-yellow-500 text-white' 
+                      : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-500'
+                  }`}
+                >
+                  En Test
+                </button>
+                <button
+                  onClick={() => handleStatusChange('done')}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                    status === 'done' 
+                      ? 'bg-green-500 text-white' 
+                      : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-500'
+                  }`}
+                >
+                  Terminé
+                </button>
               </div>
+              <textarea
+                value={statusComment}
+                onChange={(e) => setStatusComment(e.target.value)}
+                placeholder="Commentaire optionnel sur le changement de statut..."
+                className="w-full p-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                rows={2}
+              />
             </div>
+          </div>
 
-            {/* Status Update */}
-            <div className="bg-cards p-4 rounded-lg">
-              <h3 className="font-poppins font-medium mb-3">Mise à jour du statut</h3>
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleStatusChange('todo')}
-                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                      status === 'todo' 
-                        ? 'bg-gray-500 text-white' 
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    À Faire
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange('inprogress')}
-                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                      status === 'inprogress' 
-                        ? 'bg-yellow-500 text-white' 
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    En Cours
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange('done')}
-                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                      status === 'done' 
-                        ? 'bg-green-500 text-white' 
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Terminé
-                  </button>
-                </div>
-                <textarea
-                  value={statusComment}
-                  onChange={(e) => setStatusComment(e.target.value)}
-                  placeholder="Commentaire optionnel sur le changement de statut..."
-                  className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  rows={2}
-                />
-              </div>
+          {/* Statut actuel */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+            <h3 className="font-poppins font-medium mb-2 text-gray-900 dark:text-white">Statut actuel</h3>
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                status === 'todo' ? 'bg-gray-500 text-white' :
+                status === 'in_progress' ? 'bg-blue-500 text-white' :
+                status === 'testing' ? 'bg-yellow-500 text-white' :
+                'bg-green-500 text-white'
+              }`}>
+                {getStatusLabel(status)}
+              </span>
             </div>
+          </div>
 
-            {/* Actions */}
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowImpedimentModal(true)}
-                className="flex items-center px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
-              >
-                <AlertTriangle className="w-4 h-4 mr-2" />
-                Signaler un blocage
-              </button>
-            </div>
-
-            {/* Status History */}
-            {task.statusHistory.length > 0 && (
-              <div>
-                <h3 className="font-poppins font-medium mb-3 flex items-center">
-                  <History className="w-4 h-4 mr-2" />
-                  Historique des changements
-                </h3>
-                <div className="space-y-2">
-                  {task.statusHistory.map((change) => (
-                    <div key={change.id} className="bg-gray-50 p-3 rounded-lg">
-                      <div className="flex items-center justify-between text-sm">
-                        <span>
-                          <strong>{getStatusLabel(change.fromStatus)}</strong> → <strong>{getStatusLabel(change.toStatus)}</strong>
-                        </span>
-                        <span className="text-gray-500">
-                          {change.changedAt.toLocaleDateString()} par {change.changedBy.name}
-                        </span>
-                      </div>
-                      {change.comment && (
-                        <p className="text-sm text-gray-600 mt-1">{change.comment}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Attachments */}
-            {task.attachments.length > 0 && (
-              <div>
-                <h3 className="font-poppins font-medium mb-3 flex items-center">
-                  <Paperclip className="w-4 h-4 mr-2" />
-                  Pièces jointes ({task.attachments.length})
-                </h3>
-                <div className="space-y-2">
-                  {task.attachments.map((attachment) => (
-                    <div key={attachment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center">
-                        <Paperclip className="w-4 h-4 mr-2 text-gray-500" />
-                        <span className="font-medium">{attachment.name}</span>
-                        <span className="text-sm text-gray-500 ml-2">
-                          ({(attachment.size / 1024 / 1024).toFixed(1)} MB)
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Ajouté par {attachment.uploadedBy.name}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Comments */}
+          {/* Comments */}
+          {task.comments && (
             <CommentSection 
               comments={task.comments}
               onAddComment={(content) => {
                 const newComment: Comment = {
                   id: Date.now().toString(),
                   content,
-                  author: task.assignee,
+                  author: {
+                    id: 1, // À remplacer par l'ID de l'utilisateur connecté
+                    name: 'Utilisateur actuel', // À remplacer par le nom de l'utilisateur connecté
+                    avatar: '/default-avatar.png' // À remplacer par l'avatar de l'utilisateur connecté
+                  },
                   createdAt: new Date(),
                   mentions: content.match(/@\w+/g) || []
                 };
+                
+                const updatedComments = [...(task.comments || []), newComment];
+                // Ici vous devriez sauvegarder les commentaires via votre API
+                // Pour l'instant, on met à jour localement
                 onSave(task.id, {
-                  comments: [...task.comments, newComment]
+                  comments: updatedComments
                 });
               }}
             />
-          </div>
+          )}
         </div>
       </div>
-
-      {showImpedimentModal && (
-        <ImpedimentModal
-          taskId={task.id}
-          taskTitle={task.title}
-          isOpen={showImpedimentModal}
-          onClose={() => setShowImpedimentModal(false)}
-          onSubmit={(impediment) => {
-            console.log('Impediment reporté:', impediment);
-            setShowImpedimentModal(false);
-          }}
-        />
-      )}
-    </>
+    </div>
   );
 };
 

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { ScrumProvider, useScrum } from '../product-owner/contexts/ScrumContext';
 import Sidebar from '../product-owner/components/Layout/Sidebar';
 import Header from '../product-owner/components/Layout/Header';
-import Dashboard from '../product-owner/components/Dashboard/Dashboard';
 import KanbanBoard from '../product-owner/components/Kanban/KanbanBoard';
 import ValidationPanel from '../product-owner/components/Validation/ValidationPanel';
 import NotificationPanel from '../product-owner/components/Notifications/NotificationPanel';
@@ -13,6 +12,10 @@ import Projects from '../scrum_master/components/Projects/Projects';
 import Team from '../scrum_master/components/Team/Team';
 import SprintManagement from '../scrum_master/components/Sprints/SprintManagement';
 import BacklogManagement from '../scrum_master/components/Backlog/BacklogManagement';
+
+import Dashboard from '../scrum_master/components/Dashboard/Dashboard';
+
+
 
 import MessagingInterface from '../dev_team/components/MessagingInterface';
 

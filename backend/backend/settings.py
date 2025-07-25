@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_filters',
+    'channels',  # Pour le support WebSocket
 
     
     'rest_framework',
@@ -58,6 +59,7 @@ INSTALLED_APPS = [
     'dev',
     'profil',
     'contact',
+    'chat',
 ]
 
 MIDDLEWARE = [
@@ -166,3 +168,14 @@ CORS_ALLOWED_ORIGINS = [
 
 
 AUTH_USER_MODEL = 'accounts.User'
+
+ASGI_APPLICATION = 'votre_projet.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}

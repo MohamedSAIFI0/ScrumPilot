@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, X, User, Calendar, Flag, Target } from 'lucide-react';
-import axios from 'axios';
 
 // Types
 interface Epic {
@@ -78,6 +77,7 @@ const BacklogManagement: React.FC = () => {
   const [epics, setEpics] = useState<Epic[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [productOwners, setProductOwners] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -97,6 +97,16 @@ const BacklogManagement: React.FC = () => {
 
   // Configuration API
   const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+  // Fonction pour obtenir les headers avec token (simulé avec une variable)
+  const getAuthHeaders = () => {
+    // Simuler un token - dans un vrai projet, vous utiliseriez localStorage ou un contexte
+    const token = localStorage.getItem('access_token'); // Remplacez par votre logique d'authentification
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : '',
+    };
+  };
 
   // Chargement initial
   useEffect(() => {
@@ -125,40 +135,37 @@ const BacklogManagement: React.FC = () => {
     }
   }, [success]);
 
-  const getAuthHeaders = () => {
-    const token =  localStorage.getItem('access_token');
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '',
-    };
-  };
-
   const loadInitialData = async () => {
     setLoading(true);
     setError(null);
     try {
       const headers = getAuthHeaders();
   
-      const [epicsResponse, sprintsResponse, usersResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/epics/`),
+      // Utiliser les mêmes headers pour toutes les requêtes
+      const [epicsResponse, sprintsResponse, usersResponse, productOwnersResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/epics/`, { headers }),
         fetch(`${API_BASE_URL}/sprints/`, { headers }),
-        fetch(`${API_BASE_URL}/users/`)
+        fetch(`${API_BASE_URL}/users/`, { headers }),
+        fetch(`${API_BASE_URL}/dev/`, { headers })
       ]);
 
       if (!epicsResponse.ok) throw new Error('Erreur lors du chargement des epics');
       if (!sprintsResponse.ok) throw new Error('Erreur lors du chargement des sprints');
       if (!usersResponse.ok) throw new Error('Erreur lors du chargement des utilisateurs');
+      if (!productOwnersResponse.ok) throw new Error('Erreur lors du chargement des product owners');
 
-      const [epicsData, sprintsData, usersData] = await Promise.all([
+      const [epicsData, sprintsData, usersData, productOwnersData] = await Promise.all([
         epicsResponse.json(),
         sprintsResponse.json(),
-        usersResponse.json()
+        usersResponse.json(),
+        productOwnersResponse.json()
       ]);
 
       // Vérification et initialisation des données avec des valeurs par défaut
       setEpics(Array.isArray(epicsData) ? epicsData : []);
       setSprints(Array.isArray(sprintsData) ? sprintsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
+      setProductOwners(Array.isArray(productOwnersData) ? productOwnersData : []);
 
       // Sélectionner le premier epic par défaut
       if (Array.isArray(epicsData) && epicsData.length > 0) {
@@ -171,23 +178,11 @@ const BacklogManagement: React.FC = () => {
       setEpics([]);
       setSprints([]);
       setUsers([]);
+      setProductOwners([]);
     } finally {
       setLoading(false);
     }
   };
-
-  const [productOwners, setProductOwners] = useState([]);
-
-
-
-
-  useEffect(()=>{
-    axios.get('http://localhost:8000/api/dev/')
-    .then(response => setProductOwners(response.data))
-    .catch(error => console.error('Erreur lors du fetch des product owners', error));
-  },[])
-  
-
 
   const loadUserStories = async () => {
     if (!selectedEpic) return;
@@ -195,7 +190,8 @@ const BacklogManagement: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/userstories/?epic=${selectedEpic}`);
+      const headers = getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/userstories/?epic=${selectedEpic}`, { headers });
       if (!response.ok) throw new Error('Erreur lors du chargement des user stories');
       
       const data = await response.json();
@@ -210,11 +206,10 @@ const BacklogManagement: React.FC = () => {
 
   const createUserStory = async () => {
     try {
+      const headers = getAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/userstories/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(formData),
       });
       
@@ -236,11 +231,10 @@ const BacklogManagement: React.FC = () => {
     if (!currentUserStory?.id) return;
     
     try {
+      const headers = getAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/userstories/${currentUserStory.id}/`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(formData),
       });
       
@@ -262,8 +256,10 @@ const BacklogManagement: React.FC = () => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cette user story?')) return;
     
     try {
+      const headers = getAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/userstories/${id}/`, {
         method: 'DELETE',
+        headers,
       });
       
       if (!response.ok) throw new Error('Erreur lors de la suppression de la user story');
@@ -351,7 +347,7 @@ const BacklogManagement: React.FC = () => {
     if (!Array.isArray(userIds) || userIds.length === 0) return 'Aucun assigné';
     
     return userIds.map(id => {
-      const user = users.find(u => u.id === id);
+      const user = productOwners.find(u => u.id === id) || users.find(u => u.id === id);
       return user ? user.name || user.email : 'Utilisateur inconnu';
     }).join(', ');
   };
@@ -660,7 +656,13 @@ const BacklogManagement: React.FC = () => {
                   </label>
                   <select
                     value={formData.sprint || ''}
-                    onChange={(e) => setFormData({ ...formData, sprint: e.target.value ? Number(e.target.value) : null })}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData({ 
+                        ...formData, 
+                        sprint: value ? Number(value) : null 
+                      });
+                    }}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                   >
                     <option value="">Aucun sprint</option>
@@ -673,27 +675,27 @@ const BacklogManagement: React.FC = () => {
                 </div>
               </div>
 
-            {/* Product Owner */}
-            <div>
-    <label className="block text-sm font-medium text-gray-700 mb-2">
-        Assigné à 
-    </label>
-    <select
-        value={formData.assignee.length > 0 ? formData.assignee[0] : ''}
-        onChange={(e) => setFormData(prev => ({ 
-            ...prev, 
-            assignee: e.target.value ? [Number(e.target.value)] : []
-        }))}
-        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-    >
-        <option value="">Sélectionner un assigné</option>
-        {productOwners.map(user => (
-            <option key={user.id} value={user.id}>
-                {user.name} 
-            </option>
-        ))}
-    </select>
-</div>
+              {/* Product Owner */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Assigné à 
+                </label>
+                <select
+                  value={formData.assignee.length > 0 ? formData.assignee[0] : ''}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    assignee: e.target.value ? [Number(e.target.value)] : []
+                  }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value="">Sélectionner un assigné</option>
+                  {productOwners.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} 
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <div className="flex justify-end gap-3 pt-4">
                 <button

@@ -2,16 +2,20 @@ import React, { useState } from 'react';
 import { Layout } from '../admin/components/layout/Layout';
 import { Dashboard } from '../admin/components/dashboard/Dashboard';
 import { UserManagement } from '../admin/components/users/UserManagement';
-import { Messaging } from '../admin/components/messaging/Messaging';
 import { GeneralSettings } from '../admin/components/settings/GeneralSetting';
 import { useTheme } from '../admin/hooks/useTheme';
 import TeamManager from '../admin/components/Groups/TeamManagement';
 import TeamDisplay from '../admin/components/Groups/Teams';
 import ContactCardsManager from '../admin/components/Contact/Contact';
 
+import MessagingInterface from '../admin/components/Messagerie/MessagingInterface';
+
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const { theme } = useTheme();
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const Token = localStorage.getItem('access_token');
 
   const renderContent = () => {
     switch (activeTab) {
@@ -24,7 +28,9 @@ function App() {
       case 'teams':
         return <TeamDisplay/>;
       case 'messaging':
-        return <Messaging />;
+        return (
+          <MessagingInterface/>
+        ); 
       case 'contact':
         return <ContactCardsManager />;
       case 'settings':
