@@ -1,26 +1,59 @@
-# Ignore Python bytecode
-**/__pycache__
+# ========================
+# 🔙 Django / Python backend
+# ========================
+
+# Byte-compiled / cache files
+__pycache__/
 *.py[cod]
 
-# Ignore Django migrations except __init__.py
-**/migrations
-**/migrations
-!**/migrations
+# Django migrations except __init__.py
+backend/**/migrations/
+backend/**/migrations/*.py
+backend/!**/migrations/__init__.py
 
-# Ignore virtual environments (optional, if you have one)
-venv/
-env/
-
-# Ignore environment files
+# Environment and secrets
 .env
-
-# Ignore SQLite DB (if used)
 *.sqlite3
 
-# Ignore IDE/editor configs
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Pytest / test cache
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+
+# IDE/editor files
 .vscode/
 .idea/
 *.swp
 
+# ========================
+# 🎨 Frontend (React, Vue, etc.)
+# ========================
 
-node_modules/
+# Node modules
+frontend/node_modules/
+
+# Build outputs
+frontend/build/
+frontend/dist/
+
+# Logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Dependency lock files (optional if not committed)
+# package-lock.json
+# yarn.lock
+
+# ========================
+# 🐘 Other
+# ========================
+
+.DS_Store
+Thumbs.db
