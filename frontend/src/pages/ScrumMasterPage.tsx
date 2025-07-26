@@ -42,7 +42,7 @@ function ScrumMasterPage() {
         return <ClientFeedback />;
       case 'reports':
         return <Reports />;
-        case 'Messagerie':
+        case 'messagerie':
           return <MessagingInterface />;
       case 'settings':
         return <Settings />;

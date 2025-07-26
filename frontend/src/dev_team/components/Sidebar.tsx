@@ -28,7 +28,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Tableau de Bord', icon: LayoutDashboard },
     { id: 'kanban', label: 'Mes Tâches', icon: KanbanSquare },
     { id: 'sprint', label: 'Sprint Actif', icon: Clock },
-    { id: 'messaging', label: 'Sprint Actif', icon: Clock },
+    { id: 'messaging', label: 'Messages', icon: Clock },
     { id: 'impediments', label: 'Blocages', icon: AlertTriangle },
     { id: 'retrospective', label: 'Rétrospective', icon: MessageSquare }
   ];
