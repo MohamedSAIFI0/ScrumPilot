@@ -96,28 +96,6 @@ def notify_scrum_masters(title, message, notification_type='info'):
         logger.error(f"Error in notify_scrum_masters: {e}")
         return 0
 
-def notify_clients(title, message, notification_type='info'):
-    """Notifier tous les clients actifs"""
-    try:
-        clients = User.objects.filter(role='CLIENT', status='active')
-        notifications_created = 0
-        
-        for client in clients:
-            notification = Notification.objects.create(
-                receiver=client,
-                title=title,
-                message=message,
-                type=notification_type
-            )
-            notifications_created += 1
-            logger.info(f"Notification created for client {client.username} (ID: {notification.id})")
-        
-        logger.info(f"Created {notifications_created} notifications for clients")
-        return notifications_created
-        
-    except Exception as e:
-        logger.error(f"Error in notify_clients: {e}")
-        return 0
 
 def notify_all_users(title, message, notification_type='info'):
     """Notifier tous les utilisateurs actifs"""
