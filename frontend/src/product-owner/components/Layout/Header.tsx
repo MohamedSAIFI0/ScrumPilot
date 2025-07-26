@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Bell, Search, Plus, Sun, Moon, MessageSquare } from 'lucide-react';
 import { useScrum } from '../../contexts/ScrumContext';
+// Import de votre composant NotificationDropdown
+import { NotificationDropdown } from '../../../scrum_master/components/Layout/NotificationDropDown';
 
 interface HeaderProps {
   title: string;
@@ -14,6 +16,14 @@ export default function Header({ title, onAddClick, showAddButton = false }: Hea
 
   const toggleDarkMode = () => {
     dispatch({ type: 'TOGGLE_DARK_MODE' });
+  };
+
+  const handleNotificationClick = () => {
+    setShowNotifications(!showNotifications);
+  };
+
+  const handleCloseNotifications = () => {
+    setShowNotifications(false);
   };
 
   return (
@@ -79,19 +89,29 @@ export default function Header({ title, onAddClick, showAddButton = false }: Hea
             )}
           </button>
 
-          <button 
-            onClick={() => dispatch({ type: 'SET_VIEW', payload: 'notifications' })}
-            className={`relative p-2 rounded-lg transition-colors ${
-              state.darkMode 
-                ? 'text-gray-300 hover:text-white hover:bg-gray-700' 
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Bell className="w-6 h-6" />
-            {state.unreadNotifications > 0 && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
+          {/* Bouton notifications avec dropdown */}
+          <div className="relative">
+            <button 
+              onClick={handleNotificationClick}
+              className={`relative p-2 rounded-lg transition-colors ${
+                state.darkMode 
+                  ? 'text-gray-300 hover:text-white hover:bg-gray-700' 
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Bell className="w-6 h-6" />
+              {state.unreadNotifications > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                  {state.unreadNotifications > 9 ? '9+' : state.unreadNotifications}
+                </span>
+              )}
+            </button>
+            
+            {/* Dropdown des notifications */}
+            {showNotifications && (
+              <NotificationDropdown onClose={handleCloseNotifications} />
             )}
-          </button>
+          </div>
         </div>
       </div>
     </header>

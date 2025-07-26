@@ -35,5 +35,5 @@ urlpatterns = [
     path('api/',include('dev.urls')),
     path('api/',include('contact.urls')),
     path('api/chat/', include('chat.urls')),
-    path('api',include('notifications.urls')),
+    path('api/notifications/',include('notifications.urls')),
 ]

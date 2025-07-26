@@ -97,47 +97,96 @@ const MessagingInterface: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Charger les données initiales
-  useEffect(() => {
-    const initializeData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Charger les utilisateurs depuis l'API
-        const response = await apiCall('/users/');
-        
-        if (response && response.users && Array.isArray(response.users)) {
-          setUsers(response.users);
-          
-          // Définir l'utilisateur connecté (chercher l'admin ou prendre le premier)
-          if (response.users.length > 0) {
-            const adminUser = response.users.find(u => u.role === 'ADMIN');
-            const currentUser = adminUser || response.users[0];
-            setCurrentUser(currentUser);
-          }
-        } else {
-          throw new Error('Format de réponse utilisateurs invalide');
-        }
-        
-        // Charger les conversations après avoir défini les utilisateurs
-        await loadConversations();
-        
-      } catch (error) {
-        console.error('Erreur lors du chargement initial:', error);
-        setError('Erreur lors du chargement des données. Vérifiez que l\'API est accessible.');
-      } finally {
-        setLoading(false);
+  // ✅ Fonction utilitaire pour nettoyer et valider les données utilisateur
+  const sanitizeUser = (user: any): User | null => {
+    if (!user || typeof user !== 'object') {
+      console.warn('⚠️ Données utilisateur invalides:', user);
+      return null;
+    }
+
+    // Vérification des champs obligatoires
+    if (!user.id || typeof user.id !== 'number') {
+      console.warn('⚠️ ID utilisateur manquant ou invalide:', user);
+      return null;
+    }
+
+    if (!user.email || typeof user.email !== 'string' || user.email.trim() === '') {
+      console.warn('⚠️ Email utilisateur manquant ou invalide:', user);
+      return null;
+    }
+
+    // Fonction pour extraire un nom valide
+    const getName = (userData: any): string => {
+      // Priorité 1: nom complet défini et non vide
+      if (userData.name && typeof userData.name === 'string' && userData.name.trim() !== '' && userData.name !== 'undefined') {
+        return userData.name.trim();
       }
+      
+      // Priorité 2: partie avant @ de l'email
+      if (userData.email && typeof userData.email === 'string' && userData.email.includes('@')) {
+        const emailName = userData.email.split('@')[0];
+        if (emailName && emailName.trim() !== '') {
+          return emailName.trim();
+        }
+      }
+      
+      // Priorité 3: email complet si pas de @
+      if (userData.email && typeof userData.email === 'string' && userData.email.trim() !== '') {
+        return userData.email.trim();
+      }
+      
+      // Fallback final
+      return `Utilisateur ${userData.id}`;
     };
 
-    initializeData();
-  }, []);
+    return {
+      id: user.id,
+      email: user.email.trim(),
+      name: getName(user),
+      role: user.role || 'USER',
+      status: user.status === 'active' || user.status === 'inactive' ? user.status : 'inactive',
+      team: user.team || undefined,
+      avatar: user.avatar || undefined,
+      createdAt: user.createdAt || new Date().toISOString(),
+      lastLogin: user.lastLogin || undefined
+    };
+  };
 
-  // ✅ Fonction loadConversations améliorée avec enrichissement des participants
+  // ✅ Fonction getConversationDisplayName CORRIGÉE
+  const getConversationDisplayName = (conversation: Conversation): string => {
+    if (conversation.name && conversation.name.trim() !== '') {
+      return conversation.name;
+    }
+    
+    const otherParticipants = conversation.participants.filter(p => p.id !== currentUser?.id);
+    
+    if (otherParticipants.length === 0) {
+      return 'Conversation';
+    }
+    
+    // ✅ Utiliser directement les données déjà enrichies
+    const validNames = otherParticipants.map(participant => {
+      if (participant.name && participant.name.trim() !== '' && participant.name !== 'undefined') {
+        return participant.name.trim();
+      }
+      return `Utilisateur ${participant.id}`;
+    });
+    
+    return validNames.join(', ');
+  };
+
+  // ✅ Fonction getOtherParticipants CORRIGÉE
+  const getOtherParticipants = (conversation: Conversation): User[] => {
+    return conversation.participants.filter(p => p.id !== currentUser?.id);
+  };
+
+  // ✅ Fonction loadConversations COMPLÈTEMENT CORRIGÉE (ne touche pas aux messages)
   const loadConversations = async (): Promise<Conversation[]> => {
     try {
+      console.log('📥 Chargement des conversations... Users disponibles:', users.length);
+      
       const conversationsData = await apiCall('/chat/conversations/');
+      console.log('📦 Données conversations reçues:', conversationsData);
       
       let conversationsList: Conversation[] = [];
       
@@ -150,36 +199,164 @@ const MessagingInterface: React.FC = () => {
         conversationsList = [];
       }
       
-      // ✅ Enrichir les conversations avec les données complètes des utilisateurs
-      const enrichedConversations = conversationsList.map(conv => {
-        if (conv.participants && Array.isArray(conv.participants)) {
-          // Enrichir les données des participants avec les données complètes des utilisateurs
-          const enrichedParticipants = conv.participants.map(participant => {
-            const fullUserData = users.find(user => user.id === participant.id);
-            if (fullUserData) {
-              return { ...fullUserData, ...participant };
-            }
-            return participant;
-          });
-          
-          return {
-            ...conv,
-            participants: enrichedParticipants
-          };
-        }
-        return conv;
-      });
+      // ✅ Vérifier que les utilisateurs sont disponibles
+      if (!users || users.length === 0) {
+        console.warn('⚠️ Aucun utilisateur disponible pour l\'enrichissement');
+        return [];
+      }
+
+      // ✅ Enrichir toutes les conversations avec validation stricte
+      const enrichedConversations: Conversation[] = [];
       
-      console.log('Conversations chargées et enrichies:', enrichedConversations);
-      setConversations(enrichedConversations);
+      for (const conv of conversationsList) {
+        try {
+          if (!conv || typeof conv !== 'object' || !conv.id) {
+            console.warn('⚠️ Conversation invalide ignorée:', conv);
+            continue;
+          }
+
+          // ✅ Traiter les participants avec validation stricte
+          const validParticipants: User[] = [];
+          
+          if (Array.isArray(conv.participants)) {
+            for (const participant of conv.participants) {
+              // Chercher les données complètes de l'utilisateur
+              const fullUserData = users.find(user => user.id === participant.id);
+              
+              if (fullUserData) {
+                // Utiliser les données complètes de la liste users
+                const sanitizedUser = sanitizeUser(fullUserData);
+                if (sanitizedUser) {
+                  validParticipants.push(sanitizedUser);
+                } else {
+                  console.warn('⚠️ Données utilisateur corrompues pour ID:', participant.id);
+                }
+              } else if (participant && participant.id) {
+                // Utiliser les données partielles avec nettoyage
+                const sanitizedUser = sanitizeUser(participant);
+                if (sanitizedUser) {
+                  validParticipants.push(sanitizedUser);
+                } else {
+                  console.warn('⚠️ Participant ignoré (données invalides):', participant);
+                }
+              } else {
+                console.warn('⚠️ Participant ignoré (pas d\'ID):', participant);
+              }
+            }
+          }
+
+          // ✅ Ne conserver que les conversations avec au moins un participant valide
+          if (validParticipants.length > 0) {
+            const enrichedConversation: Conversation = {
+              id: conv.id,
+              name: conv.name || undefined,
+              type: conv.type || 'DIRECT',
+              participants: validParticipants,
+              last_message: conv.last_message || undefined,
+              updated_at: conv.updated_at || new Date().toISOString(),
+              unread_count: conv.unread_count || 0
+            };
+            
+            enrichedConversations.push(enrichedConversation);
+          } else {
+            console.warn('⚠️ Conversation ignorée (aucun participant valide):', conv.id);
+          }
+        } catch (error) {
+          console.error('Erreur lors du traitement de la conversation:', conv.id, error);
+        }
+      }
+      
+      console.log('✅ Conversations enrichies finales:', enrichedConversations.length, enrichedConversations);
+      
+      // ✅ Mettre à jour l'état SANS affecter la conversation sélectionnée ni les messages
+      setConversations(prev => {
+        // ✅ CRUCIAL : Préserver la conversation sélectionnée ET ne PAS la remplacer
+        if (selectedConversation) {
+          const updatedSelectedConv = enrichedConversations.find(conv => 
+            conv.id === selectedConversation.id
+          );
+          
+          if (updatedSelectedConv) {
+            // ✅ Mettre à jour UNIQUEMENT les métadonnées, PAS les messages
+            console.log('✅ Mise à jour métadonnées conversation sélectionnée (messages préservés)');
+            // NE PAS appeler setSelectedConversation ici pour éviter de recharger les messages
+          }
+        }
+        
+        return enrichedConversations;
+      });
       
       return enrichedConversations;
     } catch (error) {
       console.error('Erreur lors du chargement des conversations:', error);
-      setConversations([]);
-      return [];
+      // ✅ Ne pas vider les conversations en cas d'erreur
+      return conversations;
     }
   };
+
+  // ✅ Initialisation CORRIGÉE avec séquencement approprié
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log('🚀 Initialisation des données...');
+        
+        // ✅ Étape 1: Charger les utilisateurs
+        const response = await apiCall('/users/');
+        console.log('📦 Réponse utilisateurs brute:', response);
+        
+        if (response && response.users && Array.isArray(response.users)) {
+          // ✅ Nettoyer et valider tous les utilisateurs
+          const cleanUsers: User[] = [];
+          
+          for (const userData of response.users) {
+            const sanitizedUser = sanitizeUser(userData);
+            if (sanitizedUser) {
+              cleanUsers.push(sanitizedUser);
+            }
+          }
+          
+          console.log('✅ Utilisateurs nettoyés:', cleanUsers.length, cleanUsers);
+          setUsers(cleanUsers);
+          
+          // ✅ Définir l'utilisateur actuel
+          if (cleanUsers.length > 0) {
+            const adminUser = cleanUsers.find((u: User) => u.role === 'ADMIN');
+            const currentUser = adminUser || cleanUsers[0];
+            setCurrentUser(currentUser);
+            console.log('✅ Utilisateur actuel défini:', currentUser);
+            
+            // ✅ Étape 2: Attendre que les états soient mis à jour
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // ✅ Étape 3: Charger les conversations
+            console.log('📥 Chargement des conversations avec', cleanUsers.length, 'utilisateurs...');
+            
+            // Attendre encore un peu pour s'assurer que users est bien défini
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            // Charger avec le contexte users mis à jour
+            const conversations = await loadConversations();
+            console.log('✅ Initialisation terminée avec', conversations.length, 'conversations');
+          } else {
+            throw new Error('Aucun utilisateur valide trouvé');
+          }
+        } else {
+          throw new Error('Format de réponse utilisateurs invalide');
+        }
+        
+      } catch (error) {
+        console.error('❌ Erreur lors du chargement initial:', error);
+        setError('Erreur lors du chargement des données. Vérifiez que l\'API est accessible.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeData();
+  }, []); // Dépendances vides pour éviter les re-renders infinis
 
   // Auto-scroll vers le bas des messages
   useEffect(() => {
@@ -190,7 +367,7 @@ const MessagingInterface: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // ✅ Fonction loadMessages avec vérifications
+  // ✅ Fonction loadMessages avec mise en cache et vérifications renforcées
   const loadMessages = async (conversationId: number) => {
     if (!conversationId || conversationId === undefined) {
       console.error('ID de conversation invalide:', conversationId);
@@ -198,31 +375,43 @@ const MessagingInterface: React.FC = () => {
     }
     
     try {
-      console.log('Chargement des messages pour la conversation:', conversationId);
+      console.log('📨 Chargement des messages pour la conversation:', conversationId);
       const messagesData = await apiCall(`/chat/conversations/${conversationId}/`);
       
+      let messagesArray: Message[] = [];
+      
       if (messagesData && Array.isArray(messagesData.messages)) {
-        setMessages(messagesData.messages);
+        messagesArray = messagesData.messages;
       } else if (messagesData && messagesData.data && Array.isArray(messagesData.data.messages)) {
-        setMessages(messagesData.data.messages);
+        messagesArray = messagesData.data.messages;
       } else {
         console.log('Aucun message trouvé pour cette conversation');
-        setMessages([]);
+        messagesArray = [];
       }
+      
+      console.log('✅ Messages chargés:', messagesArray.length, messagesArray);
+      setMessages(messagesArray);
     } catch (error) {
       console.error('Erreur lors du chargement des messages:', error);
-      setMessages([]);
+      // ✅ En cas d'erreur, ne pas vider les messages existants
+      console.log('⚠️ Préservation des messages existants suite à l\'erreur');
     }
   };
 
-  // ✅ Fonction selectConversation avec vérifications
+  // ✅ Fonction selectConversation CORRIGÉE (évite les rechargements inutiles)
   const selectConversation = (conversation: Conversation) => {
     if (!conversation || !conversation.id) {
       console.error('Conversation invalide:', conversation);
       return;
     }
     
-    console.log('Sélection de la conversation:', conversation.id);
+    // ✅ Éviter de recharger si c'est la même conversation
+    if (selectedConversation && selectedConversation.id === conversation.id) {
+      console.log('⏭️ Conversation déjà sélectionnée, pas de rechargement');
+      return;
+    }
+    
+    console.log('🔄 Sélection de la conversation:', conversation.id, conversation);
     setSelectedConversation(conversation);
     
     // Charger les messages uniquement si l'ID est valide
@@ -336,7 +525,7 @@ const MessagingInterface: React.FC = () => {
     }
   };
 
-  // ✅ Fonction corrigée pour créer une conversation directe
+  // ✅ Fonction createDirectConversation COMPLÈTEMENT CORRIGÉE
   const createDirectConversation = async (userId: number) => {
     if (isCreatingConversation) return;
     
@@ -344,40 +533,34 @@ const MessagingInterface: React.FC = () => {
       setIsCreatingConversation(true);
       setError(null);
       
-      // Trouver l'utilisateur par son ID pour récupérer ses informations complètes
+      console.log('🚀 Création conversation avec utilisateur ID:', userId);
+      
       const targetUser = users.find(user => user.id === userId);
       if (!targetUser) {
-        console.error('Utilisateur non trouvé');
+        console.error('❌ Utilisateur non trouvé dans la liste:', userId);
         setError('Utilisateur non trouvé');
         return;
       }
 
-      // Vérifier s'il existe déjà une conversation directe avec cet utilisateur
+      console.log('✅ Utilisateur cible trouvé:', targetUser);
+
+      // Vérifier conversation existante avec recherche robuste
       const existingConversation = conversations.find(conv => 
         conv.type === 'DIRECT' && 
+        conv.participants.length === 2 &&
         conv.participants.some(p => p.id === userId) &&
-        conv.participants.length === 2
+        conv.participants.some(p => p.id === currentUser?.id)
       );
 
       if (existingConversation) {
-        // S'assurer que la conversation existante a les bonnes données de participants
-        const updatedConversation = {
-          ...existingConversation,
-          participants: existingConversation.participants.map(p => {
-            if (p.id === userId) {
-              // S'assurer que les données de l'utilisateur sont complètes
-              return { ...targetUser, ...p };
-            }
-            return p;
-          })
-        };
-        
-        selectConversation(updatedConversation);
+        console.log('✅ Conversation existante trouvée:', existingConversation);
+        selectConversation(existingConversation);
         setShowUserSearch(false);
         return;
       }
 
-      // Créer une nouvelle conversation directe
+      // Créer nouvelle conversation
+      console.log('📤 Création nouvelle conversation avec:', targetUser.email);
       const response = await apiCall('/chat/conversations/direct/', {
         method: 'POST',
         body: JSON.stringify({ 
@@ -385,81 +568,89 @@ const MessagingInterface: React.FC = () => {
         })
       });
       
-      console.log('Réponse de création de conversation:', response);
+      console.log('📦 Réponse création conversation:', response);
       
-      // ✅ Recharger les conversations pour obtenir la liste complète mise à jour
-      const updatedConversationsList = await loadConversations();
+      // ✅ Créer la conversation temporaire avec TOUTES les données utilisateur validées
+      const tempConversationId = response.id || response.conversation?.id || `temp_${Date.now()}`;
       
-      // ✅ Chercher la nouvelle conversation dans la liste mise à jour
-      let conversationToSelect = null;
+      const tempConversation: Conversation = {
+        id: tempConversationId,
+        type: 'DIRECT',
+        participants: [
+          // ✅ Utilisateur actuel avec toutes ses données
+          { ...currentUser! },
+          // ✅ Utilisateur cible avec toutes ses données
+          { ...targetUser }
+        ],
+        updated_at: new Date().toISOString(),
+        unread_count: 0
+      };
       
-      // Option 1: La conversation est retournée directement dans la réponse
-      if (response.conversation && response.conversation.id) {
-        conversationToSelect = response.conversation;
-        // S'assurer que les participants ont toutes leurs données
-        if (conversationToSelect.participants) {
-          conversationToSelect.participants = conversationToSelect.participants.map(p => {
-            if (p.id === userId) {
-              return { ...targetUser, ...p };
-            }
-            if (p.id === currentUser?.id) {
-              return { ...currentUser, ...p };
-            }
-            return p;
-          });
+      console.log('✅ Conversation temporaire créée:', tempConversation);
+      
+      // Ajouter à la liste et sélectionner
+      setConversations(prev => [tempConversation, ...prev]);
+      setSelectedConversation(tempConversation);
+      setMessages([]);
+      setShowUserSearch(false);
+      
+      // ✅ Recharger après un délai pour synchroniser avec l'API
+      setTimeout(async () => {
+        try {
+          console.log('🔄 Rechargement des conversations pour synchronisation...');
+          await loadConversations();
+        } catch (error) {
+          console.error('❌ Erreur lors du rechargement:', error);
         }
-      }
-      // Option 2: Chercher par ID dans la liste mise à jour
-      else if (response.id && updatedConversationsList) {
-        conversationToSelect = updatedConversationsList.find(conv => conv.id === response.id);
-      }
-      // Option 3: Chercher par participant dans la liste mise à jour
-      else if (updatedConversationsList) {
-        conversationToSelect = updatedConversationsList.find(conv => 
-          conv.type === 'DIRECT' && 
-          conv.participants.some(p => p.id === userId) &&
-          conv.participants.some(p => p.id === currentUser?.id) &&
-          conv.participants.length === 2
-        );
-      }
-      
-      if (conversationToSelect) {
-        console.log('Conversation trouvée, sélection:', conversationToSelect);
-        selectConversation(conversationToSelect);
-        setShowUserSearch(false);
-      } else {
-        // ✅ Fallback: créer un objet conversation temporaire avec les bonnes données
-        console.warn('Conversation non trouvée dans la liste, création d\'un objet temporaire');
-        
-        const tempConversation: Conversation = {
-          id: response.id || response.conversation?.id || Date.now(),
-          type: 'DIRECT',
-          participants: [
-            currentUser!, // Utilisateur connecté avec toutes ses données
-            targetUser    // Utilisateur cible avec toutes ses données
-          ],
-          updated_at: new Date().toISOString(),
-          unread_count: 0
-        };
-        
-        // Ajouter la conversation temporaire à la liste
-        setConversations(prev => [tempConversation, ...prev]);
-        
-        // Sélectionner la conversation temporaire
-        setSelectedConversation(tempConversation);
-        setMessages([]);
-        setShowUserSearch(false);
-        
-        console.log('Conversation temporaire créée et sélectionnée:', tempConversation);
-      }
+      }, 1500);
       
     } catch (error) {
-      console.error('Erreur lors de la création de la conversation:', error);
+      console.error('❌ Erreur lors de la création de la conversation:', error);
       setError('Erreur lors de la création de la conversation. Veuillez réessayer.');
     } finally {
       setIsCreatingConversation(false);
     }
   };
+  
+  // ✅ Hook pour recharger les messages périodiquement (SEULEMENT pour la conversation active)
+  useEffect(() => {
+    if (!selectedConversation || !selectedConversation.id || typeof selectedConversation.id !== 'number') {
+      return;
+    }
+
+    // Recharger les messages toutes les 10 secondes pour la conversation active
+    const messageReloadInterval = setInterval(async () => {
+      try {
+        console.log('🔄 Rechargement des messages pour conversation active:', selectedConversation.id);
+        await loadMessages(selectedConversation.id as number);
+      } catch (error) {
+        console.error('Erreur lors du rechargement des messages:', error);
+      }
+    }, 10000); // Toutes les 10 secondes
+
+    return () => clearInterval(messageReloadInterval);
+  }, [selectedConversation?.id]); // Se déclenche uniquement quand la conversation change
+
+  // ✅ Hook pour rafraîchir les conversations périodiquement (SANS affecter les messages)
+  useEffect(() => {
+    if (users.length === 0) return; // Ne pas démarrer l'intervalle sans utilisateurs
+    
+    const intervalId = setInterval(async () => {
+      // Ne recharger que si aucune conversation n'est en cours de création ET qu'aucun message n'est affiché
+      if (!isCreatingConversation && !showUserSearch && !selectedConversation) {
+        try {
+          console.log('🔄 Rafraîchissement automatique des conversations (pas de conversation active)');
+          await loadConversations();
+        } catch (error) {
+          console.error('Erreur lors du rafraîchissement:', error);
+        }
+      } else {
+        console.log('⏸️ Rafraîchissement automatique suspendu (conversation active ou en cours de création)');
+      }
+    }, 60000); // Rafraîchir toutes les 60 secondes (réduit la fréquence)
+
+    return () => clearInterval(intervalId);
+  }, [users.length, isCreatingConversation, showUserSearch, selectedConversation?.id]); // Inclure selectedConversation.id
 
   // Démarrer une conversation avec un utilisateur depuis la liste vide
   const startConversationWithUser = async (userId: number) => {
@@ -492,34 +683,6 @@ const MessagingInterface: React.FC = () => {
         );
       })
     : [];
-
-  // ✅ Fonction getConversationDisplayName corrigée avec validation robuste
-  const getConversationDisplayName = (conversation: Conversation) => {
-    if (conversation.name) return conversation.name;
-    
-    const otherParticipants = conversation.participants.filter(p => p.id !== currentUser?.id);
-    
-    // Vérification que les participants ont bien une propriété name
-    if (otherParticipants.length === 0) {
-      return 'Conversation';
-    }
-    
-    // S'assurer que chaque participant a un nom valide
-    const validNames = otherParticipants
-      .filter(p => p && p.name && typeof p.name === 'string')
-      .map(p => p.name);
-      
-    if (validNames.length === 0) {
-      return 'Utilisateur inconnu';
-    }
-    
-    return validNames.join(', ');
-  };
-
-  // Obtenir les autres participants (excluant l'utilisateur connecté)
-  const getOtherParticipants = (conversation: Conversation) => {
-    return conversation.participants.filter(p => p.id !== currentUser?.id);
-  };
 
   // Filtrer les utilisateurs pour la recherche
   const filteredUsersForSearch = users
