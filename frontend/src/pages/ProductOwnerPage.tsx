@@ -4,7 +4,6 @@ import Sidebar from '../product-owner/components/Layout/Sidebar';
 import Header from '../product-owner/components/Layout/Header';
 import KanbanBoard from '../product-owner/components/Kanban/KanbanBoard';
 import ValidationPanel from '../product-owner/components/Validation/ValidationPanel';
-import NotificationPanel from '../product-owner/components/Notifications/NotificationPanel';
 
 import AIAssistant from '../scrum_master/components/AI/AIAssistant';
 import ClientFeedback from '../scrum_master/components/Feedback/ClientFeedback';
@@ -14,10 +13,10 @@ import SprintManagement from '../scrum_master/components/Sprints/SprintManagemen
 import BacklogManagement from '../scrum_master/components/Backlog/BacklogManagement';
 
 import Dashboard from '../scrum_master/components/Dashboard/Dashboard';
+import MessagingInterface from '../admin/components/Messagerie/MessagingInterface';
 
 
 
-import MessagingInterface from '../dev_team/components/MessagingInterface';
 
 function AppContent() {
   const { state } = useScrum();
@@ -48,8 +47,6 @@ function AppContent() {
         return <ValidationPanel />;
       case 'statistics':
         return <Dashboard />; // Réutilise le dashboard pour les stats
-      case 'notifications':
-        return <NotificationPanel />;
       case 'team':
         return <Team />;
       case 'feedback':

@@ -9,6 +9,7 @@ import {
   User,
   X
 } from 'lucide-react';
+import { NotificationDropdown } from '../../../scrum_master/components/Layout/NotificationDropDown'; // Import du composant dropdown
 
 interface Notification {
   id: string;
@@ -68,37 +69,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notif => 
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    );
+  const handleNotificationClick = () => {
+    setShowNotifications(!showNotifications);
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notif => ({ ...notif, read: true }))
-    );
-  };
-
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'success': return '✅';
-      case 'warning': return '⚠️';
-      case 'error': return '❌';
-      default: return 'ℹ️';
-    }
-  };
-
-  const formatTime = (timestamp: string) => {
-    const now = new Date();
-    const time = new Date(timestamp);
-    const diffInHours = Math.floor((now.getTime() - time.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) return 'À l\'instant';
-    if (diffInHours < 24) return `Il y a ${diffInHours}h`;
-    return time.toLocaleDateString('fr-FR');
+  const handleCloseNotifications = () => {
+    setShowNotifications(false);
   };
 
   return (
@@ -113,7 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   src="logo.png" 
                   alt="DXC Technology" 
                   className="h-8 w-auto lg:h-10"
-                  style={{ width: '80px', height: '60px' }} // Adjusted for logo size
+                  style={{ width: '80px', height: '60px' }}
                 />
                 <div>
                   <span className="font-poppins font-semibold text-lg lg:text-xl">DXC Scrum AI</span>
@@ -145,89 +121,26 @@ export const Navbar: React.FC<NavbarProps> = ({
               })}
             </div>
 
-
             {/* Actions à droite */}
             <div className="flex items-center space-x-3 lg:space-x-4">
 
-              {/* Notifications */}
+              {/* Notifications avec dropdown externalisé */}
               <div className="relative">
                 <button 
-                  onClick={() => setShowNotifications(!showNotifications)}
+                  onClick={handleNotificationClick}
                   className="relative p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   <Bell size={20} />
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-semibold">
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-semibold animate-pulse">
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}
                 </button>
 
-                {/* Notifications Dropdown */}
+                {/* Dropdown des notifications */}
                 {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-96 overflow-hidden">
-                    <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                      <h3 className="font-poppins font-semibold text-secondary-2">
-                        Notifications
-                      </h3>
-                      <div className="flex items-center space-x-3">
-                        {unreadCount > 0 && (
-                          <button
-                            onClick={markAllAsRead}
-                            className="text-xs text-button hover:text-blue-700 font-open-sans"
-                          >
-                            Tout marquer lu
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setShowNotifications(false)}
-                          className="text-gray-400 hover:text-gray-600"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="max-h-80 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-4 text-center text-gray-500 font-open-sans">
-                          Aucune notification
-                        </div>
-                      ) : (
-                        notifications.map((notification) => (
-                          <div
-                            key={notification.id}
-                            onClick={() => markAsRead(notification.id)}
-                            className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
-                              !notification.read ? 'bg-blue-50' : ''
-                            }`}
-                          >
-                            <div className="flex items-start space-x-3">
-                              <span className="text-lg flex-shrink-0 mt-0.5">
-                                {getNotificationIcon(notification.type)}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between">
-                                  <p className="font-open-sans font-medium text-secondary-2 text-sm truncate">
-                                    {notification.title}
-                                  </p>
-                                  {!notification.read && (
-                                    <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 ml-2"></div>
-                                  )}
-                                </div>
-                                <p className="text-gray-600 font-open-sans text-xs mt-1 line-clamp-2">
-                                  {notification.message}
-                                </p>
-                                <p className="text-gray-400 font-open-sans text-xs mt-1">
-                                  {formatTime(notification.timestamp)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                  <NotificationDropdown onClose={handleCloseNotifications} />
                 )}
               </div>
               
@@ -276,7 +189,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       {showNotifications && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-25 z-40"
-          onClick={() => setShowNotifications(false)}
+          onClick={handleCloseNotifications}
         />
       )}
     </>

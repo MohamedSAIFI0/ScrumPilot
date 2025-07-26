@@ -72,16 +72,24 @@ class CreateDirectConversationView(APIView):
         
         if serializer.is_valid():
             conversation = serializer.save()
+            
+            # ✅ Retourner la conversation complète avec tous les détails
+            conversation_data = ConversationSerializer(
+                conversation,
+                context={'request': request}
+            ).data
+            
+            # ✅ Déterminer si c'est une nouvelle conversation ou existante
+            is_new = not hasattr(serializer, '_existing_conversation')
+            
             return Response({
-                'message': 'Conversation directe créée/récupérée avec succès ✅',
-                'conversation': ConversationSerializer(
-                    conversation,
-                    context={'request': request}
-                ).data
-            }, status=200)
+                'message': 'Conversation directe créée avec succès ✅' if is_new else 'Conversation directe récupérée ✅',
+                'conversation': conversation_data,
+                'id': conversation.id,  # ✅ Inclure l'ID explicitement
+                'is_new': is_new
+            }, status=201 if is_new else 200)
         
         return Response(serializer.errors, status=400)
-
 
 # 💬 Détails d'une conversation et ses messages
 class ConversationDetailView(APIView):

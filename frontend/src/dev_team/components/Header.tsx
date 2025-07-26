@@ -16,6 +16,8 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { mockUser } from '../data/mockData';
 import CalendarModal from './CalendarModal';
+import { NotificationDropdown } from '../../scrum_master/components/Layout/NotificationDropDown'; // Import du composant dropdown
+import { logout } from '../../services/apiLogin';
 
 interface HeaderProps {
   onOpenMessaging: () => void;
@@ -55,6 +57,14 @@ const Header: React.FC<HeaderProps> = ({ onOpenMessaging, onToggleSidebar, isSid
 
   const unreadCount = notifications.filter(n => n.unread).length;
 
+  const handleNotificationClick = () => {
+    setShowNotifications(!showNotifications);
+  };
+
+  const handleCloseNotifications = () => {
+    setShowNotifications(false);
+  };
+
   return (
     <>
       <header className="fixed flex items-center justify-evenly  top-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors">
@@ -74,10 +84,8 @@ const Header: React.FC<HeaderProps> = ({ onOpenMessaging, onToggleSidebar, isSid
               )}
             </button>
             
-
             {/* Logo on Mobile */}
             <div className="lg:hidden flex items-center">
-                
               <img 
                 src="/logo.png" 
                 alt="Logo" 
@@ -87,8 +95,6 @@ const Header: React.FC<HeaderProps> = ({ onOpenMessaging, onToggleSidebar, isSid
                 DevScrum
               </span>
             </div>
-
-            
           </div>
 
           {/* Right Section - Actions & User */}
@@ -110,61 +116,23 @@ const Header: React.FC<HeaderProps> = ({ onOpenMessaging, onToggleSidebar, isSid
               <Calendar className="w-5 h-5" />
             </button>
 
-            {/* Notifications */}
+            {/* Notifications avec dropdown */}
             <div className="relative">
               <button
-                onClick={() => setShowNotifications(!showNotifications)}
+                onClick={handleNotificationClick}
                 className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors relative"
               >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {unreadCount}
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                    {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </button>
 
-              {/* Notifications Dropdown */}
+              {/* Dropdown des notifications */}
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-                  <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="font-poppins font-semibold text-gray-900 dark:text-white">
-                      Notifications
-                    </h3>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className={`p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
-                          notification.unread ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-gray-900 dark:text-white text-sm">
-                              {notification.title}
-                            </h4>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">
-                              {notification.message}
-                            </p>
-                          </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                            {notification.time}
-                          </span>
-                        </div>
-                        {notification.unread && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="p-3 border-t border-gray-200 dark:border-gray-700">
-                    <button className="text-primary hover:text-purple-700 text-sm font-medium">
-                      Voir toutes les notifications
-                    </button>
-                  </div>
-                </div>
+                <NotificationDropdown onClose={handleCloseNotifications} />
               )}
             </div>
 
@@ -235,7 +203,7 @@ const Header: React.FC<HeaderProps> = ({ onOpenMessaging, onToggleSidebar, isSid
                   </div>
                   
                   <div className="border-t border-gray-200 dark:border-gray-700 py-2">
-                    <button className="w-full flex items-center px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    <button onClick={logout} className="w-full flex items-center px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                       <LogOut className="w-4 h-4 mr-3" />
                       Se Déconnecter
                     </button>

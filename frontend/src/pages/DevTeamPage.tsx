@@ -7,10 +7,11 @@ import KanbanBoard from '../dev_team/components/KanbanBoard';
 import SprintInfo from '../dev_team/components/SprintInfo';
 import ImpedimentList from '../dev_team/components/ImpedimentList';
 import RetrospectiveModal from '../dev_team/components/RetrospectiveModal';
-import MessagingInterface from '../dev_team/components/MessagingInterface';
 import CreateImpedimentModal from '../dev_team/components/CreateImpedimentModal';
 import { Task, Retrospective, Impediment } from '../dev_team/types';
 import { mockTasks, mockSprint, mockImpediments } from '../dev_team/data/mockData';
+import MessagingInterface from '../admin/components/Messagerie/MessagingInterface';
+
 
 function DevTeamPage() {
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -62,6 +63,8 @@ function DevTeamPage() {
     switch (activeSection) {
       case 'dashboard':
         return <Dashboard />;
+      case 'messaging':
+        return<MessagingInterface/>;
       case 'kanban':
         return <KanbanBoard tasks={tasks} onTaskUpdate={handleTaskUpdate} />;
       case 'sprint':
@@ -185,11 +188,6 @@ function DevTeamPage() {
           onClose={() => setShowRetrospectiveModal(false)}
           onSubmit={handleRetrospectiveSubmit}
           existingRetrospective={retrospective}
-        />
-
-        <MessagingInterface
-          isOpen={showMessaging}
-          onClose={() => setShowMessaging(false)}
         />
 
         <CreateImpedimentModal
