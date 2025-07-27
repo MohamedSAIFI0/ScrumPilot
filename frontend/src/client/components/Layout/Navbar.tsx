@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   Package, 
@@ -20,6 +20,12 @@ interface Notification {
   type: 'info' | 'success' | 'warning' | 'error';
 }
 
+interface UserInfo {
+  name: string;
+  role: string;
+  email: string;
+}
+
 interface NavbarProps {
   activeSection: string;
   onSectionChange: (section: string) => void;
@@ -34,30 +40,7 @@ const menuItems = [
 ];
 
 const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    title: 'Nouveau livrable disponible',
-    message: 'Le système de paiement Stripe est prêt pour validation',
-    timestamp: '2025-01-21T10:30:00Z',
-    read: false,
-    type: 'info'
-  },
-  {
-    id: '2',
-    title: 'Sprint terminé',
-    message: 'Sprint 4 - Panier & Commandes terminé avec 85% de réussite',
-    timestamp: '2025-01-14T16:45:00Z',
-    read: false,
-    type: 'success'
-  },
-  {
-    id: '3',
-    title: 'Feedback requis',
-    message: 'Votre avis est demandé sur les maquettes UI/UX',
-    timestamp: '2025-01-20T09:15:00Z',
-    read: true,
-    type: 'warning'
-  }
+  
 ];
 
 export const Navbar: React.FC<NavbarProps> = ({ 
@@ -66,8 +49,58 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [userInfo, setUserInfo] = useState<UserInfo>({
+    name: '',
+    role: '',
+    email: ''
+  });
+  const [loadingUser, setLoadingUser] = useState(true);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Récupérer les informations utilisateur depuis l'API
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      const token = localStorage.getItem('access_token');
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+      }
+      try {
+        setLoadingUser(true);
+        const response = await fetch('http://127.0.0.1:8000/api/current-user/',{headers});
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user) {
+            setUserInfo({
+              name: data.user.name || '',
+              role: data.user.role || '',
+              email: data.user.email || ''
+            });
+          }
+        } else {
+          console.error('Erreur lors de la récupération des informations utilisateur');
+          // Valeurs par défaut en cas d'erreur
+          setUserInfo({
+            name: 'Utilisateur',
+            role: 'USER',
+            email: ''
+          });
+        }
+      } catch (error) {
+        console.error('Erreur réseau:', error);
+        // Valeurs par défaut en cas d'erreur
+        setUserInfo({
+          name: 'Utilisateur',
+          role: 'USER',
+          email: ''
+        });
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+
+    fetchUserInfo();
+  }, []);
 
   const handleNotificationClick = () => {
     setShowNotifications(!showNotifications);
@@ -75,6 +108,31 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleCloseNotifications = () => {
     setShowNotifications(false);
+  };
+
+  // Fonction pour formater le nom d'affichage
+  const formatDisplayName = (name: string) => {
+    if (!name) return 'Utilisateur';
+    // Convertir en majuscules et ajouter "M." ou "Mme" selon le contexte
+    return `${name.toUpperCase()}`;
+  };
+
+  // Fonction pour formater le rôle d'affichage
+  const formatDisplayRole = (role: string) => {
+    switch (role?.toUpperCase()) {
+      case 'ADMIN':
+        return 'Administrateur';
+      case 'PRODUCT_OWNER':
+        return 'Product Owner';
+      case 'SCRUM_MASTER':
+        return 'Scrum Master';
+      case 'DEVELOPER':
+        return 'Développeur';
+      case 'STAKEHOLDER':
+        return 'Stakeholder';
+      default:
+        return role || 'Utilisateur';
+    }
   };
 
   return (
@@ -147,11 +205,28 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* User Profile */}
               <div className="flex items-center space-x-3 pl-3 border-l border-gray-600">
                 <div className="text-right hidden sm:block">
-                  <p className="font-open-sans font-medium text-white text-sm">M. SAIFI</p>
-                  <p className="text-xs text-gray-300">Stakeholder</p>
+                  {loadingUser ? (
+                    <div className="animate-pulse">
+                      <div className="h-4 bg-gray-600 rounded w-20 mb-1"></div>
+                      <div className="h-3 bg-gray-600 rounded w-16"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="font-open-sans font-medium text-white text-sm">
+                        {formatDisplayName(userInfo.name)}
+                      </p>
+                      <p className="text-xs text-gray-300">
+                        {formatDisplayRole(userInfo.role)}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-                  <User size={16} className="text-white" />
+                  {loadingUser ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  ) : (
+                    <User size={16} className="text-white" />
+                  )}
                 </div>
               </div>
             </div>

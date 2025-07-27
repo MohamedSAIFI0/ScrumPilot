@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard,
   KanbanSquare, 
@@ -17,6 +17,12 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+interface UserInfo {
+  name: string;
+  role: string;
+  email: string;
+}
+
 const Sidebar: React.FC<SidebarProps> = ({ 
   activeSection, 
   onSectionChange, 
@@ -24,6 +30,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   isOpen, 
   onClose 
 }) => {
+  const [userInfo, setUserInfo] = useState<UserInfo>({
+    name: '',
+    role: '',
+    email: ''
+  });
+  const [loadingUser, setLoadingUser] = useState(true);
+
   const menuItems = [
     { id: 'dashboard', label: 'Tableau de Bord', icon: LayoutDashboard },
     { id: 'kanban', label: 'Mes Tâches', icon: KanbanSquare },
@@ -32,6 +45,69 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'impediments', label: 'Blocages', icon: AlertTriangle },
     { id: 'retrospective', label: 'Rétrospective', icon: MessageSquare }
   ];
+
+  // Récupérer les informations utilisateur depuis l'API
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      const token = localStorage.getItem('access_token');
+      const headers = {
+        'Authorization':`Bearer ${token}`,
+      }
+
+      try {
+        setLoadingUser(true);
+        const response = await fetch('http://127.0.0.1:8000/api/current-user/', { headers });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user) {
+            setUserInfo({
+              name: data.user.name || '',
+              role: data.user.role || '',
+              email: data.user.email || ''
+            });
+          }
+        } else {
+          console.error('Erreur lors de la récupération des informations utilisateur');
+          // Valeurs par défaut en cas d'erreur
+          setUserInfo({
+            name: 'John Doe',
+            role: 'DEVELOPER',
+            email: ''
+          });
+        }
+      } catch (error) {
+        console.error('Erreur réseau:', error);
+        // Valeurs par défaut en cas d'erreur
+        setUserInfo({
+          name: 'John Doe',
+          role: 'DEVELOPER',
+          email: ''
+        });
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+
+    fetchUserInfo();
+  }, []);
+
+  // Fonction pour formater le rôle d'affichage
+  const formatDisplayRole = (role: string) => {
+    switch (role?.toUpperCase()) {
+      case 'ADMIN':
+        return 'Administrateur';
+      case 'PRODUCT_OWNER':
+        return 'Product Owner';
+      case 'SCRUM_MASTER':
+        return 'Scrum Master';
+      case 'DEVELOPER':
+        return 'Développeur';
+      case 'STAKEHOLDER':
+        return 'Stakeholder';
+      default:
+        return role || 'Utilisateur';
+    }
+  };
 
   const handleItemClick = (itemId: string) => {
     onSectionChange(itemId);
@@ -94,15 +170,27 @@ const Sidebar: React.FC<SidebarProps> = ({
               </button>
             );
           })}
-         
         </nav>
 
         <div className="mt-auto pt-8">
           <div className="flex items-center p-4 bg-gray-700 dark:bg-gray-800 rounded-lg">
             <User className="w-8 h-8 mr-3 text-gray-300 dark:text-gray-400" />
             <div>
-              <p className="font-medium text-sm">John Doe</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500">Développeur</p>
+              {loadingUser ? (
+                <div className="animate-pulse">
+                  <div className="h-4 bg-gray-600 rounded w-16 mb-1"></div>
+                  <div className="h-3 bg-gray-600 rounded w-20"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="font-medium text-sm">
+                    {userInfo.name || 'Utilisateur'}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    {formatDisplayRole(userInfo.role)}
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>

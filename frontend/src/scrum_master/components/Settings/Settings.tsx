@@ -1,17 +1,34 @@
-import React, { useState } from 'react';
-import { Settings as SettingsIcon, User, Bell, Shield, Palette, Globe, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings as SettingsIcon, User, Bell, Shield, Palette, Globe, Save, Loader } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+
+interface ApiResponse {
+  message: string;
+  user: {
+    id: number;
+    email: string;
+    name: string;
+    role: string;
+    status: string;
+    team: string | null;
+    avatar: string | null;
+    createdAt: string;
+    lastLogin: string | null;
+  };
+}
 
 const Settings: React.FC = () => {
   const { isDarkMode, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState({
     profile: {
-      name: 'Mehdi Alaoui',
-      email: 'mehdi.alaoui@dxc.com',
-      role: 'Scrum Master',
-      phone: '+212 6 12 34 56 78',
-      bio: 'Scrum Master expérimenté avec 5 ans d\'expérience dans la gestion de projets Agile.'
+      name: '',
+      email: '',
+      role: '',
+      createdAt: ''
     },
     notifications: {
       emailNotifications: true,
@@ -33,16 +50,90 @@ const Settings: React.FC = () => {
     }
   });
 
+  // Fonction pour récupérer les données utilisateur
+  const fetchUserData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = localStorage.getItem('access_token');
+      
+      const response = await fetch('http://127.0.0.1:8000/api/current-user/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+
+      const apiResponse: ApiResponse = await response.json();
+      const userData = apiResponse.user;
+      
+      // Mapper les données API vers notre état local
+      setSettings(prev => ({
+        ...prev,
+        profile: {
+          name: userData.name || '',
+          email: userData.email || '',
+          role: userData.role || '',
+          createdAt: userData.createdAt || ''
+        }
+      }));
+      
+    } catch (err) {
+      console.error('Erreur lors de la récupération des données utilisateur:', err);
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Charger les données au montage du composant
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
   const tabs = [
     { id: 'profile', label: 'Profil', icon: User },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'appearance', label: 'Apparence', icon: Palette },
-    { id: 'security', label: 'Sécurité', icon: Shield }
   ];
 
-  const handleSave = () => {
-    console.log('Settings saved:', settings);
-    // Ici vous pourriez envoyer les données à votre API
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+      const token = localStorage.getItem('access_token');
+      // Ici vous pouvez envoyer les données mises à jour à votre API
+      const response = await fetch('http://127.0.0.1:8000/api/current-user/', {
+        method: 'PUT', // ou PATCH selon votre API
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: settings.profile.name,
+          email: settings.profile.email,
+          role: settings.profile.role,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur lors de la sauvegarde: ${response.status}`);
+      }
+
+      console.log('Paramètres sauvegardés avec succès');
+      // Vous pouvez ajouter une notification de succès ici
+      
+    } catch (err) {
+      console.error('Erreur lors de la sauvegarde:', err);
+      setError(err instanceof Error ? err.message : 'Erreur lors de la sauvegarde');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateSetting = (category: string, key: string, value: any) => {
@@ -55,132 +146,106 @@ const Settings: React.FC = () => {
     }));
   };
 
-  const renderProfileTab = () => (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-6">
-        <div className="h-20 w-20 bg-primary rounded-full flex items-center justify-center">
-          <User className="h-10 w-10 text-white" />
+  const renderProfileTab = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center space-x-2">
+            <Loader className="h-5 w-5 animate-spin text-primary" />
+            <span className="text-gray-600 dark:text-gray-400">Chargement des données...</span>
+          </div>
         </div>
-        <div>
-          <button className="bg-button text-white px-4 py-2 rounded-lg hover:bg-button/90 transition-colors">
-            Changer la photo
-          </button>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            JPG, PNG ou GIF. Taille maximale 2MB.
-          </p>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Nom complet
-          </label>
-          <input
-            type="text"
-            value={settings.profile.name}
-            onChange={(e) => updateSetting('profile', 'name', e.target.value)}
-            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Email
-          </label>
-          <input
-            type="email"
-            value={settings.profile.email}
-            onChange={(e) => updateSetting('profile', 'email', e.target.value)}
-            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Rôle
-          </label>
-          <select
-            value={settings.profile.role}
-            onChange={(e) => updateSetting('profile', 'role', e.target.value)}
-            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
-          >
-            <option value="Scrum Master">Scrum Master</option>
-            <option value="Product Owner">Product Owner</option>
-            <option value="Développeur">Développeur</option>
-            <option value="Designer">Designer</option>
-          </select>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Téléphone
-          </label>
-          <input
-            type="tel"
-            value={settings.profile.phone}
-            onChange={(e) => updateSetting('profile', 'phone', e.target.value)}
-            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
-          />
-        </div>
-      </div>
-      
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Biographie
-        </label>
-        <textarea
-          value={settings.profile.bio}
-          onChange={(e) => updateSetting('profile', 'bio', e.target.value)}
-          rows={4}
-          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
-        />
-      </div>
-    </div>
-  );
+      );
+    }
 
-  const renderNotificationsTab = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-secondary-2 dark:text-dark-text mb-4">
-          Préférences de notification
-        </h3>
-        <div className="space-y-4">
-          {Object.entries(settings.notifications).map(([key, value]) => (
-            <div key={key} className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-secondary-2 dark:text-dark-text">
-                  {key === 'emailNotifications' && 'Notifications par email'}
-                  {key === 'pushNotifications' && 'Notifications push'}
-                  {key === 'sprintReminders' && 'Rappels de sprint'}
-                  {key === 'taskAssignments' && 'Assignations de tâches'}
-                  {key === 'meetingReminders' && 'Rappels de réunion'}
-                  {key === 'weeklyReports' && 'Rapports hebdomadaires'}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {key === 'emailNotifications' && 'Recevoir les notifications par email'}
-                  {key === 'pushNotifications' && 'Recevoir les notifications push dans le navigateur'}
-                  {key === 'sprintReminders' && 'Rappels avant la fin des sprints'}
-                  {key === 'taskAssignments' && 'Notifications lors de nouvelles assignations'}
-                  {key === 'meetingReminders' && 'Rappels 15 minutes avant les réunions'}
-                  {key === 'weeklyReports' && 'Rapport de progression hebdomadaire'}
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={value as boolean}
-                  onChange={(e) => updateSetting('notifications', key, e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
-              </label>
+    return (
+      <div className="space-y-6">
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-red-800 dark:text-red-400">Erreur: {error}</p>
+              <button
+                onClick={fetchUserData}
+                className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+              >
+                Réessayer
+              </button>
             </div>
-          ))}
+          </div>
+        )}
+        
+        <div className="flex items-center space-x-6">
+          <div className="h-20 w-20 bg-primary rounded-full flex items-center justify-center">
+            <User className="h-10 w-10 text-white" />
+          </div>
+          <div>
+            <button className="bg-button text-white px-4 py-2 rounded-lg hover:bg-button/90 transition-colors">
+              Changer la photo
+            </button>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              JPG, PNG ou GIF. Taille maximale 2MB.
+            </p>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Nom
+            </label>
+            <input
+              type="text"
+              value={settings.profile.name}
+              onChange={(e) => updateSetting('profile', 'name', e.target.value)}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
+              placeholder="Entrez votre nom"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              value={settings.profile.email}
+              onChange={(e) => updateSetting('profile', 'email', e.target.value)}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
+              placeholder="votre.email@exemple.com"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Rôle
+            </label>
+            <input
+              readOnly
+              type="text"
+              value={settings.profile.role}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Membre depuis
+            </label>
+            <input
+              type="text"
+              value={settings.profile.createdAt ? new Date(settings.profile.createdAt).toLocaleDateString('fr-FR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              }) : ''}
+              readOnly
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+            />
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderAppearanceTab = () => (
     <div className="space-y-6">
@@ -259,75 +324,10 @@ const Settings: React.FC = () => {
     </div>
   );
 
-  const renderSecurityTab = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-secondary-2 dark:text-dark-text mb-4">
-          Sécurité du compte
-        </h3>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-            <div>
-              <p className="font-medium text-secondary-2 dark:text-dark-text">
-                Authentification à deux facteurs
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Ajouter une couche de sécurité supplémentaire à votre compte
-              </p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.security.twoFactorAuth}
-                onChange={(e) => updateSetting('security', 'twoFactorAuth', e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
-            </label>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Délai d'expiration de session (minutes)
-            </label>
-            <select
-              value={settings.security.sessionTimeout}
-              onChange={(e) => updateSetting('security', 'sessionTimeout', e.target.value)}
-              className="w-full md:w-48 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
-            >
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
-              <option value="60">1 heure</option>
-              <option value="120">2 heures</option>
-            </select>
-          </div>
-          
-          <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-secondary-2 dark:text-dark-text">
-                  Mot de passe
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Dernière modification : {new Date(settings.security.passwordLastChanged).toLocaleDateString('fr-FR')}
-                </p>
-              </div>
-              <button className="bg-button text-white px-4 py-2 rounded-lg hover:bg-button/90 transition-colors">
-                Changer le mot de passe
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderTabContent = () => {
     switch (activeTab) {
       case 'profile': return renderProfileTab();
-      case 'notifications': return renderNotificationsTab();
       case 'appearance': return renderAppearanceTab();
-      case 'security': return renderSecurityTab();
       default: return renderProfileTab();
     }
   };
@@ -338,10 +338,15 @@ const Settings: React.FC = () => {
         <h1 className="text-title font-poppins text-secondary-2 dark:text-dark-text">Paramètres</h1>
         <button
           onClick={handleSave}
-          className="bg-primary text-white px-6 py-2 rounded-lg flex items-center space-x-2 hover:bg-primary/90 transition-colors"
+          disabled={saving || loading}
+          className="bg-primary text-white px-6 py-2 rounded-lg flex items-center space-x-2 hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Save className="h-4 w-4" />
-          <span>Enregistrer</span>
+          {saving ? (
+            <Loader className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          <span>{saving ? 'Sauvegarde...' : 'Enregistrer'}</span>
         </button>
       </div>
       

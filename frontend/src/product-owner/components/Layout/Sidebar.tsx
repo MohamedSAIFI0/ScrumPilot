@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   List, 
@@ -9,9 +9,26 @@ import {
   Bell,
   MessageSquare,
   Users,
-  FolderOpen
+  FolderOpen,
+  Loader,
+  User
 } from 'lucide-react';
 import { useScrum } from '../../contexts/ScrumContext';
+
+interface ApiResponse {
+  message: string;
+  user: {
+    id: number;
+    email: string;
+    name: string;
+    role: string;
+    status: string;
+    team: string | null;
+    avatar: string | null;
+    createdAt: string;
+    lastLogin: string | null;
+  };
+}
 
 const menuItems = [
   { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
@@ -27,6 +44,140 @@ const menuItems = [
 
 export default function Sidebar() {
   const { state, dispatch } = useScrum();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState({
+    name: '',
+    role: '',
+    email: '',
+    avatar: null as string | null
+  });
+
+  // Fonction pour récupérer les données utilisateur
+  const fetchUserData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = localStorage.getItem('access_token');
+      
+      const response = await fetch('http://127.0.0.1:8000/api/current-user/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+
+      const apiResponse: ApiResponse = await response.json();
+      const userData = apiResponse.user;
+      
+      // Mapper les données API vers notre état local
+      setUser({
+        name: userData.name || '',
+        email: userData.email || '',
+        role: userData.role || '',
+        avatar: userData.avatar
+      });
+      
+    } catch (err) {
+      console.error('Erreur lors de la récupération des données utilisateur:', err);
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Charger les données au montage du composant
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  const getRoleDisplayName = (role: string) => {
+    const roleMap: { [key: string]: string } = {
+      'ADMIN': 'Administrateur',
+      'SCRUM_MASTER': 'Scrum Master',
+      'PRODUCT_OWNER': 'Product Owner',
+      'DEVELOPER': 'Développeur',
+    };
+    return roleMap[role] || role;
+  };
+
+  const getUserInitials = (name: string) => {
+    if (!name) return 'U';
+    const words = name.split(' ');
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const renderUserSection = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+            <Loader className="w-4 h-4 animate-spin text-gray-500" />
+          </div>
+          <div>
+            <p className="font-semibold font-poppins text-gray-300">Chargement...</p>
+            <p className="text-sm text-gray-400 font-open-sans">...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-red-300 rounded-full flex items-center justify-center">
+            <User className="w-4 h-4 text-red-600" />
+          </div>
+          <div>
+            <p className="font-semibold font-poppins text-red-300">Erreur</p>
+            <button 
+              onClick={fetchUserData}
+              className="text-xs text-blue-300 hover:underline font-open-sans"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        onClick={() => dispatch({ type: 'SET_VIEW', payload: 'settings' })}
+        className="flex items-center space-x-3 w-full hover:bg-gray-700 hover:bg-opacity-50 rounded-lg p-2 transition-colors"
+      >
+        <div className="w-10 h-10 bg-gradient-to-r from-primary to-button rounded-full flex items-center justify-center">
+          {user.avatar ? (
+            <img 
+              src={user.avatar} 
+              alt={user.name}
+              className="w-10 h-10 rounded-full object-cover"
+            />
+          ) : (
+            <span className="text-sm font-bold font-poppins">
+              {getUserInitials(user.name)}
+            </span>
+          )}
+        </div>
+        <div className="text-left">
+          <p className="font-semibold font-poppins">
+            {user.name || 'Utilisateur'}
+          </p>
+          <p className="text-sm text-gray-300 font-open-sans">
+            {getRoleDisplayName(user.role)}
+          </p>
+        </div>
+      </button>
+    );
+  };
 
   return (
     <div className={`fixed left-0 top-0 w-64 h-screen z-50 ${
@@ -41,7 +192,9 @@ export default function Sidebar() {
           />
           <div>
             <h1 className="text-xl font-bold font-poppins">DXC scrum AI</h1>
-            <p className="text-sm text-gray-300 font-open-sans">Product Owner</p>
+            <p className="text-sm text-gray-300 font-open-sans">
+              {loading ? 'Chargement...' : getRoleDisplayName(user.role)}
+            </p>
           </div>
         </div>
 
@@ -80,15 +233,7 @@ export default function Sidebar() {
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-gray-600">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-primary to-button rounded-full flex items-center justify-center">
-            <span className="text-sm font-bold font-poppins">MS</span>
-          </div>
-          <div>
-            <p className="font-semibold font-poppins">Mohamed SAIFI</p>
-            <p className="text-sm text-gray-300 font-open-sans">Product Owner</p>
-          </div>
-        </div>
+        {renderUserSection()}
       </div>
     </div>
   );

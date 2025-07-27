@@ -8,10 +8,11 @@ import SprintInfo from '../dev_team/components/SprintInfo';
 import ImpedimentList from '../dev_team/components/ImpedimentList';
 import RetrospectiveModal from '../dev_team/components/RetrospectiveModal';
 import CreateImpedimentModal from '../dev_team/components/CreateImpedimentModal';
+import UserProfile from '../dev_team/components/UserProfile'; // Import du composant profil
 import { Task, Retrospective, Impediment } from '../dev_team/types';
 import { mockTasks, mockSprint, mockImpediments } from '../dev_team/data/mockData';
 import MessagingInterface from '../admin/components/Messagerie/MessagingInterface';
-
+import { ArrowLeft } from 'lucide-react'; // Pour le bouton de retour
 
 function DevTeamPage() {
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -20,6 +21,7 @@ function DevTeamPage() {
   const [showRetrospectiveModal, setShowRetrospectiveModal] = useState(false);
   const [showMessaging, setShowMessaging] = useState(false);
   const [showCreateImpediment, setShowCreateImpediment] = useState(false);
+  const [showProfile, setShowProfile] = useState(false); // État pour afficher le profil
   const [retrospective, setRetrospective] = useState<Retrospective | undefined>();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -45,11 +47,20 @@ function DevTeamPage() {
   // Callback pour gérer la création d'impediment
   const handleImpedimentSubmit = useCallback((success: boolean) => {
     if (success) {
-      // Fermer la modal et potentiellement rafraîchir la liste
       setShowCreateImpediment(false);
-      // Note: La liste se rafraîchira automatiquement via son propre useEffect
     }
   }, []);
+
+  // Gestion de l'ouverture du profil
+  const handleOpenProfile = () => {
+    setShowProfile(true);
+    setIsSidebarOpen(false); // Fermer la sidebar sur mobile
+  };
+
+  // Gestion du retour depuis le profil
+  const handleBackFromProfile = () => {
+    setShowProfile(false);
+  };
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -60,11 +71,31 @@ function DevTeamPage() {
   };
 
   const renderContent = () => {
+    // Si le profil est ouvert, afficher le composant profil
+    if (showProfile) {
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+          {/* Bouton de retour */}
+          <div className="p-4 lg:p-6">
+            <button
+              onClick={handleBackFromProfile}
+              className="mb-6 flex items-center space-x-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="font-medium">Retour au tableau de bord</span>
+            </button>
+          </div>
+          <UserProfile />
+        </div>
+      );
+    }
+
+    // Contenu normal selon la section active
     switch (activeSection) {
       case 'dashboard':
         return <Dashboard />;
       case 'messaging':
-        return<MessagingInterface/>;
+        return <MessagingInterface />;
       case 'kanban':
         return <KanbanBoard tasks={tasks} onTaskUpdate={handleTaskUpdate} />;
       case 'sprint':
@@ -162,39 +193,51 @@ function DevTeamPage() {
   return (
     <ThemeProvider>
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-        <Sidebar 
-          activeSection={activeSection} 
-          onSectionChange={setActiveSection}
-          onOpenMessaging={() => setShowMessaging(true)}
-          isOpen={isSidebarOpen}
-          onClose={closeSidebar}
-        />
-        
-        <div className="flex-1 flex flex-col lg:ml-64">
-          <Header 
-            onOpenMessaging={() => setShowMessaging(true)} 
-            onToggleSidebar={toggleSidebar}
-            isSidebarOpen={isSidebarOpen}
+        {/* Sidebar - cachée quand le profil est affiché */}
+        {!showProfile && (
+          <Sidebar 
+            activeSection={activeSection} 
+            onSectionChange={setActiveSection}
+            onOpenMessaging={() => setShowMessaging(true)}
+            isOpen={isSidebarOpen}
+            onClose={closeSidebar}
           />
+        )}
+        
+        <div className={`flex-1 flex flex-col ${!showProfile ? 'lg:ml-64' : ''}`}>
+          {/* Header - cachée quand le profil est affiché */}
+          {!showProfile && (
+            <Header 
+              onOpenMessaging={() => setShowMessaging(true)} 
+              onToggleSidebar={toggleSidebar}
+              isSidebarOpen={isSidebarOpen}
+              onOpenProfile={handleOpenProfile} // Passer la fonction pour ouvrir le profil
+            />
+          )}
           
-          <main className="flex-1 overflow-x-hidden pt-20 lg:pt-24">
+          <main className={`flex-1 overflow-x-hidden ${!showProfile ? 'pt-20 lg:pt-24' : ''}`}>
             {renderContent()}
           </main>
         </div>
 
-        <RetrospectiveModal
-          sprintId={mockSprint.id}
-          isOpen={showRetrospectiveModal}
-          onClose={() => setShowRetrospectiveModal(false)}
-          onSubmit={handleRetrospectiveSubmit}
-          existingRetrospective={retrospective}
-        />
+        {/* Modals - affichées seulement si le profil n'est pas ouvert */}
+        {!showProfile && (
+          <>
+            <RetrospectiveModal
+              sprintId={mockSprint.id}
+              isOpen={showRetrospectiveModal}
+              onClose={() => setShowRetrospectiveModal(false)}
+              onSubmit={handleRetrospectiveSubmit}
+              existingRetrospective={retrospective}
+            />
 
-        <CreateImpedimentModal
-          isOpen={showCreateImpediment}
-          onClose={() => setShowCreateImpediment(false)}
-          onSubmit={handleImpedimentSubmit}
-        />
+            <CreateImpedimentModal
+              isOpen={showCreateImpediment}
+              onClose={() => setShowCreateImpediment(false)}
+              onSubmit={handleImpedimentSubmit}
+            />
+          </>
+        )}
       </div>
     </ThemeProvider>
   );
