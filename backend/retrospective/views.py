@@ -13,7 +13,7 @@ class RetrospectiveViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         try:
-            retrospective = serializer.save()
+            retrospective = serializer.save(submitted_by=self.request.user)
             logger.info(f"📝 Nouvelle rétrospective créée pour le sprint : {retrospective.sprint.name}")
 
             notify_scrum_masters(

@@ -1,9 +1,7 @@
 from django.db import models
 import uuid
 from sprints.models import Sprint
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
+from accounts.models import User
 
 class Retrospective(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MessageSquare, Calendar, User, Clock, Filter, CheckCircle2, AlertCircle, Eye, TrendingUp } from 'lucide-react';
 
+interface SubmittedBy {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  team: string;
+  avatar: string;
+  createdAt: string;
+  lastLogin: string | null;
+}
+
 interface Retrospective {
   id: string;
   sprint: string;
@@ -8,7 +20,7 @@ interface Retrospective {
   what_worked: string;
   what_didnt_work: string;
   improvements: string;
-  submitted_by: string;
+  submitted_by: SubmittedBy;
   submitted_at: string;
   is_locked: boolean;
 }
@@ -22,10 +34,10 @@ interface Sprint {
 }
 
 const API_CONFIG = {
-  baseUrl: 'http://localhost:8000/api',
+  baseUrl: 'http://127.0.0.1:8000/api',
   endpoints: {
-    retrospectives: 'http://localhost:8000/api/retrospectives/',
-    sprints: 'http://localhost:8000/api/sprints/',
+    retrospectives: 'http://127.0.0.1:8000/api/retrospectives/',
+    sprints: 'http://127.0.0.1:8000/api/sprints/',
   }
 };
 
@@ -39,7 +51,15 @@ const RetrospectivesDashboard: React.FC = () => {
   const [selectedRetrospective, setSelectedRetrospective] = useState<Retrospective | null>(null);
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('authToken') || localStorage.getItem('access_token');
+    // Récupération du token depuis le localStorage/sessionStorage ou votre méthode d'auth
+    let token = null;
+    try {
+      token = localStorage.getItem('authToken') || localStorage.getItem('access_token');
+    } catch (e) {
+      // Fallback si localStorage n'est pas disponible
+      console.warn('localStorage non disponible');
+    }
+    
     return {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -51,20 +71,23 @@ const RetrospectivesDashboard: React.FC = () => {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(API_CONFIG.endpoints.retrospectives, {
+      const response = await fetch('http://127.0.0.1:8000/api/retrospectives/', {
         method: 'GET',
         headers: getAuthHeaders(),
       });
 
       if (!response.ok) {
-        throw new Error(`Erreur lors du chargement: ${response.status}`);
+        throw new Error(`Erreur lors du chargement: ${response.status} - ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('Données reçues:', data); // Pour débugger
+      
+      // Gestion des différents formats de réponse possible
       setRetrospectives(Array.isArray(data) ? data : data.results || []);
     } catch (err) {
       console.error('Erreur lors du chargement des rétrospectives:', err);
-      setError(err instanceof Error ? err.message : 'Erreur lors du chargement');
+      setError(err instanceof Error ? err.message : 'Erreur lors du chargement des données');
     } finally {
       setIsLoading(false);
     }
@@ -72,19 +95,23 @@ const RetrospectivesDashboard: React.FC = () => {
 
   const fetchSprints = async () => {
     try {
-      const response = await fetch(API_CONFIG.endpoints.sprints, {
+      const response = await fetch('http://127.0.0.1:8000/api/sprints/', {
         method: 'GET',
         headers: getAuthHeaders(),
       });
 
       if (!response.ok) {
-        throw new Error(`Erreur lors du chargement des sprints: ${response.status}`);
+        throw new Error(`Erreur lors du chargement des sprints: ${response.status} - ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('Sprints reçus:', data); // Pour débugger
+      
+      // Gestion des différents formats de réponse possible
       setSprints(Array.isArray(data) ? data : data.results || []);
     } catch (err) {
       console.error('Erreur lors du chargement des sprints:', err);
+      // On continue même si les sprints ne se chargent pas
     }
   };
 
@@ -99,10 +126,16 @@ const RetrospectivesDashboard: React.FC = () => {
     return sprint ? sprint.name : `Sprint ${sprintId}`;
   };
 
+  const getSubmitterName = (submittedBy: SubmittedBy) => {
+    return submittedBy?.name || submittedBy?.email || 'Utilisateur inconnu';
+  };
+
   const filteredRetrospectives = retrospectives.filter(retro => {
     const searchLower = searchTerm.toLowerCase();
+    const submitterName = getSubmitterName(retro.submitted_by);
+    
     const matchesSearch = 
-      (retro.submitted_by || '').toLowerCase().includes(searchLower) ||
+      submitterName.toLowerCase().includes(searchLower) ||
       (retro.what_worked || '').toLowerCase().includes(searchLower) ||
       (retro.what_didnt_work || '').toLowerCase().includes(searchLower) ||
       (retro.improvements || '').toLowerCase().includes(searchLower) ||
@@ -115,7 +148,7 @@ const RetrospectivesDashboard: React.FC = () => {
 
   const totalRetrospectives = retrospectives.length;
   const uniqueSprints = [...new Set(retrospectives.map(r => r.sprint).filter(Boolean))].length;
-  const uniqueContributors = [...new Set(retrospectives.map(r => r.submitted_by).filter(Boolean))].length;
+  const uniqueContributors = [...new Set(retrospectives.map(r => r.submitted_by?.id).filter(Boolean))].length;
 
   if (isLoading) {
     return (
@@ -267,8 +300,20 @@ const RetrospectivesDashboard: React.FC = () => {
                         <User className="w-5 h-5 text-purple-600" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">{retrospective.submitted_by || 'Utilisateur inconnu'}</h3>
-                        <p className="text-sm text-gray-500">{getSprintName(retrospective.sprint)}</p>
+                        <h3 className="font-semibold text-gray-900">
+                          {getSubmitterName(retrospective.submitted_by)}
+                        </h3>
+                        <div className="flex items-center space-x-2 text-sm text-gray-500">
+                          <span>{getSprintName(retrospective.sprint)}</span>
+                          {retrospective.submitted_by?.team && (
+                            <>
+                              <span>•</span>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                                {retrospective.submitted_by.team}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -333,12 +378,21 @@ const RetrospectivesDashboard: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">
-                    Rétrospective de {selectedRetrospective.submitted_by || 'Utilisateur inconnu'}
+                    Rétrospective de {getSubmitterName(selectedRetrospective.submitted_by)}
                   </h2>
-                  <p className="text-gray-500 mt-1">
-                    {getSprintName(selectedRetrospective.sprint)} • 
-                    Soumis le {new Date(selectedRetrospective.submitted_at).toLocaleDateString('fr-FR')}
-                  </p>
+                  <div className="flex items-center space-x-4 text-gray-500 mt-1">
+                    <span>{getSprintName(selectedRetrospective.sprint)}</span>
+                    <span>•</span>
+                    <span>Soumis le {new Date(selectedRetrospective.submitted_at).toLocaleDateString('fr-FR')}</span>
+                    {selectedRetrospective.submitted_by?.team && (
+                      <>
+                        <span>•</span>
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                          Équipe {selectedRetrospective.submitted_by.team}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => setSelectedRetrospective(null)}
