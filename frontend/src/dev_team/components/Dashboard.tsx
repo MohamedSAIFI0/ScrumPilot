@@ -63,11 +63,23 @@ interface Blocage {
   updated_at: string;
 }
 
+interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  is_read: boolean;
+  created_at: string;
+  updated_at: string;
+  user: number;
+}
+
 const Dashboard: React.FC = () => {
   // États pour les données
   const [userStories, setUserStories] = useState<UserStory[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [blocages, setBlocages] = useState<Blocage[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,27 +94,30 @@ const Dashboard: React.FC = () => {
       }
 
       // Fetch toutes les données en parallèle
-      const [userStoriesRes, sprintsRes, blocagesRes] = await Promise.all([
+      const [userStoriesRes, sprintsRes, blocagesRes, notificationsRes] = await Promise.all([
         fetch('http://127.0.0.1:8000/api/userstories/'),
-        fetch('http://127.0.0.1:8000/api/sprints/',{headers}),
-        fetch('http://127.0.0.1:8000/api/blocages/')
+        fetch('http://127.0.0.1:8000/api/sprints/', {headers}),
+        fetch('http://127.0.0.1:8000/api/blocages/'),
+        fetch('http://127.0.0.1:8000/api/notifications/', {headers})
       ]);
 
       // Vérifier les réponses
-      if (!userStoriesRes.ok || !sprintsRes.ok || !blocagesRes.ok) {
+      if (!userStoriesRes.ok || !sprintsRes.ok || !blocagesRes.ok || !notificationsRes.ok) {
         throw new Error('Erreur lors du chargement des données');
       }
 
       // Parser les données JSON
-      const [userStoriesData, sprintsData, blocagesData] = await Promise.all([
+      const [userStoriesData, sprintsData, blocagesData, notificationsData] = await Promise.all([
         userStoriesRes.json(),
         sprintsRes.json(),
-        blocagesRes.json()
+        blocagesRes.json(),
+        notificationsRes.json()
       ]);
 
       setUserStories(userStoriesData);
       setSprints(sprintsData);
       setBlocages(blocagesData);
+      setNotifications(notificationsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
       console.error('Erreur lors du fetch des données:', err);
@@ -127,49 +142,10 @@ const Dashboard: React.FC = () => {
   // Trouver le sprint actif
   const activeSprint = sprints.find(sprint => sprint.status === 'active');
 
-  // Mock activity data (peut être remplacé par une vraie API plus tard)
-  const recentActivities: ActivityItem[] = [
-    {
-      id: '1',
-      type: 'task_update',
-      title: 'Tâche terminée',
-      description: 'Nouvelle user story terminée',
-      user: { id: '1', name: 'Vous', email: '', avatar: '', role: 'developer' },
-      timestamp: new Date(Date.now() - 1800000), // 30 min ago
-      icon: 'CheckCircle2',
-      color: 'text-green-600'
-    },
-    {
-      id: '2',
-      type: 'comment',
-      title: 'Nouveau commentaire',
-      description: 'Commentaire ajouté sur une user story',
-      user: { id: '2', name: 'Jane Smith', email: '', avatar: '', role: 'scrum_master' },
-      timestamp: new Date(Date.now() - 3600000), // 1 hour ago
-      icon: 'MessageSquare',
-      color: 'text-blue-600'
-    },
-    {
-      id: '3',
-      type: 'impediment',
-      title: 'Blocage signalé',
-      description: `${criticalBlocages} blocage(s) critique(s) détecté(s)`,
-      user: { id: '1', name: 'Vous', email: '', avatar: '', role: 'developer' },
-      timestamp: new Date(Date.now() - 7200000), // 2 hours ago
-      icon: 'AlertTriangle',
-      color: 'text-red-600'
-    },
-    {
-      id: '4',
-      type: 'sprint_event',
-      title: 'Sprint actif',
-      description: activeSprint ? `${activeSprint.name} en cours` : 'Aucun sprint actif',
-      user: { id: '2', name: 'Scrum Master', email: '', avatar: '', role: 'scrum_master' },
-      timestamp: new Date(Date.now() - 14400000), // 4 hours ago
-      icon: 'Calendar',
-      color: 'text-purple-600'
-    }
-  ];
+  // Obtenir les 5 notifications les plus récentes
+  const recentNotifications = notifications
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
 
   const getDaysRemaining = () => {
     if (!activeSprint) return 0;
@@ -180,7 +156,8 @@ const Dashboard: React.FC = () => {
     return Math.max(0, diffDays);
   };
 
-  const formatTimeAgo = (date: Date) => {
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
     const now = new Date();
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
     
@@ -193,15 +170,46 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const getIconComponent = (iconName: string) => {
-    const icons: { [key: string]: React.ComponentType<any> } = {
-      CheckCircle2,
-      MessageSquare,
-      AlertTriangle,
-      Calendar
-    };
-    const IconComponent = icons[iconName] || Activity;
-    return IconComponent;
+  const getNotificationIcon = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'task_update':
+      case 'user_story':
+        return CheckCircle2;
+      case 'comment':
+      case 'message':
+        return MessageSquare;
+      case 'impediment':
+      case 'blocage':
+      case 'warning':
+        return AlertTriangle;
+      case 'sprint_event':
+      case 'sprint':
+        return Calendar;
+      case 'info':
+      default:
+        return Activity;
+    }
+  };
+
+  const getNotificationColor = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'task_update':
+      case 'user_story':
+        return 'text-green-600';
+      case 'comment':
+      case 'message':
+        return 'text-blue-600';
+      case 'impediment':
+      case 'blocage':
+      case 'warning':
+        return 'text-red-600';
+      case 'sprint_event':
+      case 'sprint':
+        return 'text-purple-600';
+      case 'info':
+      default:
+        return 'text-gray-600';
+    }
   };
 
   // Affichage d'erreur
@@ -443,31 +451,44 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            {recentActivities.map((activity) => {
-              const IconComponent = getIconComponent(activity.icon);
-              return (
-                <div key={activity.id} className="flex items-start space-x-3">
-                  <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-700 ${activity.color}`}>
-                    <IconComponent className="w-4 h-4" />
+            {recentNotifications.length > 0 ? (
+              recentNotifications.map((notification) => {
+                const IconComponent = getNotificationIcon(notification.type);
+                const iconColor = getNotificationColor(notification.type);
+                return (
+                  <div key={notification.id} className="flex items-start space-x-3">
+                    <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-700 ${iconColor}`}>
+                      <IconComponent className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {notification.title}
+                        </p>
+                        {!notification.is_read && (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 truncate">
+                        {notification.message}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {formatTimeAgo(notification.created_at)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {activity.title}
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 truncate">
-                      {activity.description}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {formatTimeAgo(activity.timestamp)}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <div className="text-center py-8">
+                <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">Aucune notification récente</p>
+              </div>
+            )}
           </div>
 
           <button className="w-full mt-4 text-sm text-primary hover:text-purple-700 font-medium">
-            Voir toute l'activité
+            Voir toutes les notifications
           </button>
         </div>
       </div>

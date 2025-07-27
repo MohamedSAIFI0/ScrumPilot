@@ -29,13 +29,13 @@ interface Blocage {
   task?: {
     id: string;
     title: string;
-  } | null;
+  } | number | null;
   reported_by?: {
     id: string;
     username: string;
     name?: string;
-  };
-  created_at: string;
+  } | number | null;
+  reported_at: string;
   updated_at?: string;
 }
 
@@ -59,6 +59,10 @@ const BlocagesList: React.FC<BlocagesListProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>('');
   
+  // Cache pour les utilisateurs et tâches
+  const [usersCache, setUsersCache] = useState<Map<number, any>>(new Map());
+  const [tasksCache, setTasksCache] = useState<Map<number, any>>(new Map());
+  
   // États des filtres
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
@@ -77,6 +81,99 @@ const BlocagesList: React.FC<BlocagesListProps> = ({
     filterAndSortBlocages();
   }, [blocages, searchTerm, selectedSeverity, selectedStatus, sortBy, sortOrder]);
 
+  // Fonction pour récupérer les détails d'un utilisateur
+  const fetchUserDetails = async (userId: number) => {
+    if (usersCache.has(userId)) {
+      return usersCache.get(userId);
+    }
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/users/${userId}/`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        setUsersCache(prev => new Map(prev).set(userId, userData));
+        return userData;
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération de l\'utilisateur:', error);
+    }
+    
+    return null;
+  };
+
+  // Fonction pour récupérer les détails d'une tâche
+  const fetchTaskDetails = async (taskId: number) => {
+    if (tasksCache.has(taskId)) {
+      return tasksCache.get(taskId);
+    }
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/tasks/${taskId}/`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const taskData = await response.json();
+        setTasksCache(prev => new Map(prev).set(taskId, taskData));
+        return taskData;
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération de la tâche:', error);
+    }
+    
+    return null;
+  };
+
+  // Fonction pour enrichir les blocages avec les détails des utilisateurs et tâches
+  const enrichBlocagesData = async (blocagesData: any[]) => {
+    const enrichedBlocages = await Promise.all(
+      blocagesData.map(async (blocage) => {
+        const enrichedBlocage = { ...blocage };
+        
+        // Enrichir les données utilisateur
+        if (typeof blocage.reported_by === 'number') {
+          const userDetails = await fetchUserDetails(blocage.reported_by);
+          if (userDetails) {
+            enrichedBlocage.reported_by = {
+              id: userDetails.id,
+              username: userDetails.username,
+              name: userDetails.first_name && userDetails.last_name 
+                ? `${userDetails.first_name} ${userDetails.last_name}`
+                : userDetails.username
+            };
+          }
+        }
+        
+        // Enrichir les données de tâche
+        if (typeof blocage.task === 'number') {
+          const taskDetails = await fetchTaskDetails(blocage.task);
+          if (taskDetails) {
+            enrichedBlocage.task = {
+              id: taskDetails.id,
+              title: taskDetails.title || taskDetails.name || `Tâche #${taskDetails.id}`
+            };
+          }
+        }
+
+        // Normaliser les noms de champs (reported_at -> created_at pour la compatibilité)
+        enrichedBlocage.created_at = blocage.reported_at || blocage.created_at || new Date().toISOString();
+        
+        return enrichedBlocage;
+      })
+    );
+    
+    return enrichedBlocages;
+  };
+
   const fetchBlocages = async () => {
     try {
       setIsLoading(true);
@@ -90,19 +187,15 @@ const BlocagesList: React.FC<BlocagesListProps> = ({
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Données reçues:', data); // Debug
+        console.log('Données brutes reçues:', data);
         
-        // Normaliser les données pour s'assurer qu'elles ont la bonne structure
-        const blocagesData = (data.results || data || []).map((blocage: any) => ({
-          ...blocage,
-          created_at: blocage.created_at || blocage.createdAt || new Date().toISOString(),
-          updated_at: blocage.updated_at || blocage.updatedAt || null,
-          // S'assurer que les relations sont bien structurées
-          reported_by: blocage.reported_by || blocage.reportedBy || null,
-          task: blocage.task || null
-        }));
+        const blocagesData = data.results || data || [];
         
-        setBlocages(blocagesData);
+        // Enrichir les données avec les détails des utilisateurs et tâches
+        const enrichedBlocages = await enrichBlocagesData(blocagesData);
+        
+        console.log('Données enrichies:', enrichedBlocages);
+        setBlocages(enrichedBlocages);
       } else {
         setError('Erreur lors de la récupération des blocages');
       }
@@ -157,7 +250,10 @@ const BlocagesList: React.FC<BlocagesListProps> = ({
     if (searchTerm) {
       filtered = filtered.filter(blocage =>
         blocage.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        blocage.description.toLowerCase().includes(searchTerm.toLowerCase())
+        blocage.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (blocage.reported_by && typeof blocage.reported_by === 'object' && 
+         (blocage.reported_by.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (blocage.reported_by.name && blocage.reported_by.name.toLowerCase().includes(searchTerm.toLowerCase()))))
       );
     }
 
@@ -179,7 +275,6 @@ const BlocagesList: React.FC<BlocagesListProps> = ({
         case 'date':
           const dateA = new Date(a.created_at);
           const dateB = new Date(b.created_at);
-          // Vérifier si les dates sont valides
           if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) comparison = 0;
           else if (isNaN(dateA.getTime())) comparison = 1;
           else if (isNaN(dateB.getTime())) comparison = -1;
@@ -264,7 +359,6 @@ const BlocagesList: React.FC<BlocagesListProps> = ({
     
     const date = new Date(dateString);
     
-    // Vérifier si la date est valide
     if (isNaN(date.getTime())) {
       console.warn('Date invalide reçue:', dateString);
       return 'Date invalide';
@@ -283,6 +377,15 @@ const BlocagesList: React.FC<BlocagesListProps> = ({
       return 'Erreur de format';
     }
   };
+
+  const getReportedByDisplay = (reportedBy: any) => {
+    return reportedBy?.name || 'Utilisateur inconnu';
+  };
+
+  const getTaskDisplay = (task: any) => {
+    return task?.title || 'Tâche inconnue';
+  };
+  
 
   const getStats = () => {
     const total = blocages.length;
@@ -357,7 +460,7 @@ const BlocagesList: React.FC<BlocagesListProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Rechercher un blocage..."
+              placeholder="Rechercher un blocage ou un utilisateur..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
@@ -600,17 +703,15 @@ const BlocagesList: React.FC<BlocagesListProps> = ({
                       {formatDate(blocage.created_at)}
                     </div>
                     
-                    {blocage.reported_by && (
-                      <div className="flex items-center">
-                        <User className="w-4 h-4 mr-1" />
-                        {blocage.reported_by.name || blocage.reported_by.username}
-                      </div>
-                    )}
+                    <div className="flex items-center">
+                      <User className="w-4 h-4 mr-1" />
+                      {getReportedByDisplay(blocage.reported_by)}
+                    </div>
                     
                     {blocage.task && (
                       <div className="flex items-center">
                         <Target className="w-4 h-4 mr-1" />
-                        {blocage.task.title}
+                        {getTaskDisplay(blocage.task)}
                       </div>
                     )}
                   </div>

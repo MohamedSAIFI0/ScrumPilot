@@ -94,16 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               </button>
             );
           })}
-          
-          {/* Messaging Button */}
-          <button
-            onClick={handleMessagingClick}
-            className="w-full flex items-center px-4 py-3 rounded-lg transition-colors duration-200 font-open-sans text-gray-300 dark:text-gray-400 hover:bg-gray-700 dark:hover:bg-gray-800 hover:text-white relative"
-          >
-            <MessageCircle className="w-5 h-5 mr-3" />
-            Messagerie
-            <span className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-          </button>
+         
         </nav>
 
         <div className="mt-auto pt-8">
