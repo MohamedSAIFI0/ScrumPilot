@@ -19,4 +19,6 @@ urlpatterns = [
 
     path('users/delete/<str:email>/', views.DeleteUserView.as_view(), name='delete-user'),
 
+    path('current-user/', views.CurrentUserView.as_view(), name='current-user'),
+
 ]

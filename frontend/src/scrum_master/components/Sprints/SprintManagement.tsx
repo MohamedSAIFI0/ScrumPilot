@@ -413,7 +413,7 @@ const SprintManagement: React.FC = () => {
               <option value="">Sélectionner un projet</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
-                  {project.name} ({project.code})
+                  {project.name} 
                 </option>
               ))}
             </select>

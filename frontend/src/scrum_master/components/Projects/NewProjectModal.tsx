@@ -27,7 +27,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
     end_date: '',
     budget: '',
     objectives: [''],
-    technologies: [],
+    technologies: '', 
     risks: [''],
     client: '',
     product_owner: '',
@@ -36,7 +36,8 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
   const [scrumMasters, setScrumMasters] = useState([]);
   const [productOwners, setProductOwners] = useState([]);
   const [clientss, setClients] = useState([]);
-
+  const [teams, setTeams] = useState([]); // Ajouté pour les équipes dynamiques
+  const [currentUser, setCurrentUser] = useState(null); // Ajouté pour l'utilisateur connecté
 
   useEffect(() => {
     axios.get('http://localhost:8000/api/scrum-masters/')
@@ -44,21 +45,35 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       .catch(error => console.error('Erreur lors du fetch des Scrum Masters', error));
   }, []);
 
-  useEffect(()=>{
+  useEffect(() => {
     axios.get('http://localhost:8000/api/product-owners/')
-    .then(response => setProductOwners(response.data))
-    .catch(error => console.error('Erreur lors du fetch des product owners', error));
-  },[])
-  
+      .then(response => setProductOwners(response.data))
+      .catch(error => console.error('Erreur lors du fetch des product owners', error));
+  }, []);
 
-useEffect(() => {
-  axios.get('http://localhost:8000/api/clients/')
-    .then(response => setClients(response.data))
-    .catch(error => console.error('Erreur lors du fetch des clients', error));
-}, []);
+  useEffect(() => {
+    axios.get('http://localhost:8000/api/clients/')
+      .then(response => setClients(response.data))
+      .catch(error => console.error('Erreur lors du fetch des clients', error));
+  }, []);
 
+  // Nouveau useEffect pour récupérer les équipes
+  useEffect(() => {
+    axios.get('http://127.0.0.1:8000/api/teams/')
+      .then(response => setTeams(response.data))
+      .catch(error => console.error('Erreur lors du fetch des équipes', error));
+  }, []);
 
-
+  // Nouveau useEffect pour récupérer l'utilisateur connecté
+  useEffect(() => {
+    axios.get('http://localhost:8000/api/users/')
+      .then(response => setCurrentUser(response.data))
+      .catch(error => {
+        console.error('Erreur lors du fetch de l\'utilisateur connecté', error);
+        // Fallback si l'API n'est pas disponible
+        setCurrentUser({ username: 'Utilisateur inconnu' });
+      });
+  }, []);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -67,31 +82,6 @@ useEffect(() => {
     { value: 'high', label: 'Haute priorité', color: 'text-red-600' },
     { value: 'medium', label: 'Priorité moyenne', color: 'text-yellow-600' },
     { value: 'low', label: 'Faible priorité', color: 'text-green-600' }
-  ];
-
-  const teams = [
-    'Team Alpha',
-    'Team Beta',
-    'Team Gamma',
-    'Team Delta',
-    'Team Epsilon'
-  ];
-
-  const availableTechnologies = [
-    'React',
-    'TypeScript',
-    'Node.js',
-    'Python',
-    'Java',
-    'Docker',
-    'Kubernetes',
-    'AWS',
-    'MongoDB',
-    'PostgreSQL',
-    'Django',
-    'FastAPI',
-    'Vue.js',
-    'Angular'
   ];
 
   const validateForm = () => {
@@ -146,6 +136,12 @@ useEffect(() => {
 
     setLoading(true);
 
+    // Traitement des technologies : conversion de string en array
+    const technologiesArray = formData.technologies
+      .split(',')
+      .map(tech => tech.trim())
+      .filter(tech => tech.length > 0);
+
     const payload = {
       name: formData.name,
       description: formData.description,
@@ -156,11 +152,11 @@ useEffect(() => {
       end_date: formData.end_date,
       budget: parseFloat(formData.budget),
       objectives: formData.objectives.filter(obj => obj.trim()),
-      technologies: formData.technologies,
+      technologies: technologiesArray, // Utilisation du tableau traité
       risks: formData.risks.filter(risk => risk.trim()),
       status: 'Planification',
       progress: 0,
-      created_by: 'Mehdi Alaoui', // À adapter selon votre système d'authentification
+      created_by: currentUser?.username || 'Utilisateur inconnu', // Utilisation de l'utilisateur connecté
       client: parseInt(formData.client),
       product_owner: formData.product_owner ? parseInt(formData.product_owner) : null,
       scrum_master: formData.scrum_master ? parseInt(formData.scrum_master) : null,
@@ -219,7 +215,7 @@ useEffect(() => {
       end_date: '',
       budget: '',
       objectives: [''],
-      technologies: [],
+      technologies: '', // Réinitialisé en string vide
       risks: [''],
       client: '',
       product_owner: '',
@@ -273,15 +269,6 @@ useEffect(() => {
         risks: prev.risks.filter((_, i) => i !== index)
       }));
     }
-  };
-
-  const toggleTechnology = (tech: string) => {
-    setFormData(prev => ({
-      ...prev,
-      technologies: prev.technologies.includes(tech)
-        ? prev.technologies.filter(t => t !== tech)
-        : [...prev.technologies, tech]
-    }));
   };
 
   if (!isOpen) return null;
@@ -353,23 +340,22 @@ useEffect(() => {
 
             {/* Client */}
             <div>
-  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-    Client
-  </label>
-  <select
-    value={formData.client}
-    onChange={(e) => setFormData(prev => ({ ...prev, client: e.target.value }))}
-    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
-  >
-    <option value="">Sélectionner un client</option>
-    {clientss.map(client => (
-      <option key={client.id} value={client.id}>
-        {client.name}
-      </option>
-    ))}
-  </select>
-</div>
-
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Client
+              </label>
+              <select
+                value={formData.client}
+                onChange={(e) => setFormData(prev => ({ ...prev, client: e.target.value }))}
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
+              >
+                <option value="">Sélectionner un client</option>
+                {clientss.map(client => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {/* Priorité */}
             <div>
@@ -389,7 +375,7 @@ useEffect(() => {
               </select>
             </div>
 
-            {/* Équipe */}
+            {/* Équipe - Modifié pour utiliser l'API */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Équipe assignée *
@@ -403,8 +389,8 @@ useEffect(() => {
               >
                 <option value="">Sélectionner une équipe</option>
                 {teams.map(team => (
-                  <option key={team} value={team}>
-                    {team}
+                  <option key={team.id} value={team.id}>
+                    {team.name}
                   </option>
                 ))}
               </select>
@@ -451,44 +437,41 @@ useEffect(() => {
 
             {/* Product Owner */}
             <div>
-  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-    Product Owner
-  </label>
-  <select
-    value={formData.product_owner}
-    onChange={(e) => setFormData(prev => ({ ...prev, product_owner: e.target.value }))}
-    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
-  >
-    <option value="">Sélectionner un Product Owner</option>
-    {productOwners.map(user => (
-      <option key={user.id} value={user.id}>
-        {user.name} 
-      </option>
-    ))}
-  </select>
-</div>
-
-            
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Product Owner
+              </label>
+              <select
+                value={formData.product_owner}
+                onChange={(e) => setFormData(prev => ({ ...prev, product_owner: e.target.value }))}
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
+              >
+                <option value="">Sélectionner un Product Owner</option>
+                {productOwners.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} 
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {/* Scrum Master */}
             <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-        Scrum Master
-      </label>
-      <select
-        value={formData.scrum_master}
-        onChange={(e) => setFormData(prev => ({ ...prev, scrum_master: e.target.value }))}
-        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
-      >
-        <option value="">Sélectionner un Scrum Master</option>
-        {scrumMasters.map(user => (
-          <option key={user.id} value={user.id}>
-            {user.name}
-          </option>
-        ))}
-      </select>
-    </div>
-
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Scrum Master
+              </label>
+              <select
+                value={formData.scrum_master}
+                onChange={(e) => setFormData(prev => ({ ...prev, scrum_master: e.target.value }))}
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
+              >
+                <option value="">Sélectionner un Scrum Master</option>
+                {scrumMasters.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {/* Date de début */}
             <div>
@@ -527,24 +510,21 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Technologies */}
+          {/* Technologies - Modifié en textarea */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Technologies utilisées
             </label>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              {availableTechnologies.map(tech => (
-                <label key={tech} className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.technologies.includes(tech)}
-                    onChange={() => toggleTechnology(tech)}
-                    className="rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">{tech}</span>
-                </label>
-              ))}
-            </div>
+            <textarea
+              value={formData.technologies}
+              onChange={(e) => setFormData(prev => ({ ...prev, technologies: e.target.value }))}
+              rows={3}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-dark-card text-gray-900 dark:text-dark-text"
+              placeholder="Saisissez les technologies séparées par des virgules (ex: React, TypeScript, Node.js, MongoDB)"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Séparez les technologies par des virgules
+            </p>
           </div>
 
           {/* Objectifs */}

@@ -14,14 +14,24 @@ class FeedbackCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         try:
             feedback = serializer.save()
-            logger.info(f"💬 Nouveau feedback reçu pour le projet : {feedback.project.name}")
+            
+            # Accéder au projet via la user story
+            project_name = "N/A"
+            if feedback.userstory and hasattr(feedback.userstory, 'sprint') and feedback.userstory.sprint:
+                # Si la user story a un sprint, récupérer le projet du sprint
+                project_name = feedback.userstory.sprint.project.name
+            elif feedback.userstory and hasattr(feedback.userstory, 'project'):
+                # Si la user story a une relation directe avec le projet
+                project_name = feedback.userstory.project.name
+            
+            logger.info(f"💬 Nouveau feedback reçu pour le projet : {project_name}")
 
             notify_scrum_masters(
                 title="💬 Nouveau feedback reçu",
-                message=f"Un nouveau feedback a été soumis pour le projet '{feedback.project.name}'.",
+                message=f"Un nouveau feedback a été soumis pour le projet '{project_name}'.",
                 notification_type="info"
             )
-            print(f"✅ Notification envoyée au Scrum Master pour le projet {feedback.project.name}")
+            print(f"✅ Notification envoyée au Scrum Master pour le projet {project_name}")
         except Exception as e:
             logger.error(f"❌ Erreur lors de l'enregistrement du feedback : {e}")
             raise

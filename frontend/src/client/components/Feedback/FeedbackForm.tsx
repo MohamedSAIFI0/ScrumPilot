@@ -1,14 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
-import { Star, Send, FileText, AlertCircle, CheckCircle, ChevronDown, User, FolderOpen, Calendar, FileCheck } from 'lucide-react';
+import { Star, Send, FileText, AlertCircle, CheckCircle, ChevronDown, User, Calendar, FileCheck } from 'lucide-react';
 
 interface Project {
   id: string;
   name: string;
   description?: string;
-  client?: string;
-  client_id?: string;
-  client_email?: string; // Ajout de client_email comme alternative
+  client: string; // ID du client (ForeignKey vers Client)
 }
 
 interface Sprint {
@@ -27,10 +24,16 @@ interface UserStory {
 }
 
 interface ClientInfo {
-  id?: string; // Optionnel maintenant
+  id: string; // ID du user
   name: string;
-  email: string; // Email sera utilisé comme identifiant
+  email: string;
   role: string;
+}
+
+interface Client {
+  id: string; // ID du client (différent de l'ID user)
+  name: string;
+  user_id?: string; // Lien vers User si nécessaire
 }
 
 interface FeedbackFormProps {
@@ -45,8 +48,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
   const [category, setCategory] = useState('general');
   const [priority, setPriority] = useState('medium');
   const [selectedUserStoryId, setSelectedUserStoryId] = useState<string>('');
-  const [selectedDeliverableType, setSelectedDeliverableType] = useState<'project' | 'sprint' | 'userstory'>('project');
-  const [selectedDeliverableId, setSelectedDeliverableId] = useState<string>(deliverableId || '');
+  const [selectedSprintId, setSelectedSprintId] = useState<string>(deliverableId || '');
   
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,10 +58,10 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
   
   // Data state
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
+  const [clientData, setClientData] = useState<Client | null>(null); // Nouveau : données client séparées
   const [projects, setProjects] = useState<Project[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [userStories, setUserStories] = useState<UserStory[]>([]);
-  const [filteredSprints, setFilteredSprints] = useState<Sprint[]>([]);
   const [filteredUserStories, setFilteredUserStories] = useState<UserStory[]>([]);
 
   const categories = [
@@ -77,42 +79,91 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
     { value: 'high', label: 'Élevée', color: 'text-red-600 bg-red-100' }
   ];
 
-  const deliverableTypes = [
-    { value: 'project', label: 'Projet', icon: FolderOpen },
-    { value: 'sprint', label: 'Sprint', icon: Calendar },
-    { value: 'userstory', label: 'User Story', icon: FileCheck }
-  ];
-
-  // Load client info from localStorage
+  // Load client info from localStorage or API
   useEffect(() => {
-    try {
-      const storedClient = localStorage.getItem('user');
-      if (storedClient) {
-        const client = JSON.parse(storedClient);
-        console.log('Client info loaded:', client);
-        
-        // Vérifier si le client a au moins un email
-        if (!client.email) {
-          setError('Email du client manquant. Veuillez vous reconnecter.');
+    const loadClientInfo = async () => {
+      try {
+        const accessToken = localStorage.getItem('access_token');
+        if (!accessToken) {
+          setError('Token d\'accès manquant. Veuillez vous reconnecter.');
           return;
         }
+
+        // Récupérer les infos de l'utilisateur connecté (pas tous les utilisateurs!)
+        const userResponse = await fetch('http://127.0.0.1:8000/api/current-user/', {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+
+        if (!userResponse.ok) {
+          throw new Error(`Impossible de récupérer les informations utilisateur: ${userResponse.status}`);
+        }
+
+        const response = await userResponse.json();
+        console.log('Current user response:', response);
         
-        setClientInfo(client);
-      } else {
-        setError('Informations du client non trouvées. Veuillez vous reconnecter.');
+        const userData = response.user; // Récupérer les données de l'utilisateur depuis response.user
+        
+        if (!userData || !userData.id) {
+          setError('ID de l\'utilisateur manquant dans la réponse API.');
+          return;
+        }
+
+        console.log('Current user loaded:', userData);
+        setClientInfo(userData);
+
+        // Si l'utilisateur est un client, récupérer ses données client
+        if (userData.role === 'CLIENT') {
+          try {
+            const clientResponse = await fetch('http://127.0.0.1:8000/api/clients/', {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+              },
+            });
+
+            if (clientResponse.ok) {
+              const clientsData = await clientResponse.json();
+              console.log('Clients data loaded:', clientsData);
+              
+              // Trouver le client correspondant à cet utilisateur
+              // Supposons que le modèle Client a un champ user_id ou similaire
+              const matchingClient = clientsData.find((client: Client) => {
+                // Vous devrez adapter cette logique selon votre structure de données
+                // Option 1: Si Client hérite de User, l'ID sera le même
+                return client.id === userData.id;
+                // Option 2: Si vous avez un champ user_id dans Client
+                // return client.user_id === userData.id;
+              });
+
+              if (matchingClient) {
+                setClientData(matchingClient);
+                console.log('Matching client found:', matchingClient);
+              } else {
+                console.warn('No matching client found for user:', userData.id);
+                setError('Aucune donnée client trouvée pour cet utilisateur.');
+              }
+            }
+          } catch (clientError) {
+            console.error('Error loading client data:', clientError);
+            // Ne pas arrêter le processus si les données client ne peuvent pas être chargées
+          }
+        }
+        
+      } catch (error) {
+        console.error('Erreur lors de la récupération des informations utilisateur:', error);
+        setError('Erreur lors de la récupération des informations utilisateur.');
       }
-    } catch (error) {
-      console.error('Erreur lors de la récupération des informations client:', error);
-      setError('Erreur lors de la récupération des informations client.');
-    }
+    };
+
+    loadClientInfo();
   }, []);
 
-  // Load data from APIs with user filtering
+  // Load data from APIs with correct user filtering
   useEffect(() => {
     const loadData = async () => {
-      // Utiliser email au lieu de id
-      if (!clientInfo?.email) {
-        console.log('No client email available yet');
+      if (!clientInfo?.id) {
+        console.log('No client ID available yet');
         return;
       }
 
@@ -120,17 +171,17 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
       setError(null);
       
       try {
-        console.log('Loading data for client email:', clientInfo.email);
-        const accessToken = localStorage.getItem('access_token')
+        console.log('Loading data for user:', clientInfo);
+        const accessToken = localStorage.getItem('access_token');
         const headers = {
           'Authorization': `Bearer ${accessToken}`,
-        }
+        };
         
-        // Chargement des données avec filtrage côté serveur (RECOMMANDÉ)
+        // Charger toutes les données
         const [projectsRes, sprintsRes, userStoriesRes] = await Promise.all([
-          fetch(`http://127.0.0.1:8000/api/projects/`),
-          fetch(`http://127.0.0.1:8000/api/sprints/`,{headers}),
-          fetch(`http://127.0.0.1:8000/api/userstories/`)
+          fetch(`http://127.0.0.1:8000/api/projects/`, { headers }),
+          fetch(`http://127.0.0.1:8000/api/sprints/`, { headers }),
+          fetch(`http://127.0.0.1:8000/api/userstories/`, { headers })
         ]);
 
         // Vérification des réponses
@@ -154,19 +205,32 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
         console.log('Sprints loaded:', sprintsData);
         console.log('User Stories loaded:', userStoriesData);
 
-        // Filtrage côté client - utiliser email au lieu de id
-        const clientProjects = projectsData.filter((project: Project) => {
-          const clientMatch = project.client === clientInfo.email || 
-                             project.client === clientInfo.name ||
-                             project.client_id === clientInfo.email ||
-                             project.client_id === clientInfo.name ||
-                             project.client_email === clientInfo.email ||
-                             // Si le client est admin, afficher tous les projets
-                             (clientInfo.role === 'ADMIN');
-                             
-          console.log(`Project ${project.id} (${project.name}): client=${project.client}, client_id=${project.client_id}, client_email=${project.client_email}, matches=${clientMatch}`);
-          return clientMatch;
-        });
+        // Filtrage correct basé sur le rôle et l'ID client
+        let clientProjects: Project[] = [];
+
+        if (clientInfo.role === 'ADMIN') {
+          clientProjects = projectsData;
+          console.log('Admin user - showing all projects');
+        } else if (clientInfo.role === 'CLIENT') {
+          // Pour les clients, utiliser l'ID user car Client hérite de User (proxy=True)
+          const clientId = clientInfo.id; // ID user = ID client quand Client hérite de User
+          
+          clientProjects = projectsData.filter((project: Project) => {
+            // Convertir en string pour la comparaison car l'API peut retourner des types différents
+            const matches = String(project.client) === String(clientId);
+            console.log(`Project ${project.id} (${project.name}): client=${project.client}, current_client=${clientId}, matches=${matches}`);
+            return matches;
+          });
+          
+          console.log(`Client user (${clientId}) - filtered projects:`, clientProjects.length);
+        } else {
+          // Pour les autres rôles (PO, SM, DEV), filtrer selon leurs attributions
+          clientProjects = projectsData.filter((project: Project) => {
+            // Vous pouvez ajouter la logique pour PO, SM, DEV ici si nécessaire
+            // Par exemple, filtrer par product_owner, scrum_master, ou équipe
+            return true; // Temporaire - à adapter selon vos besoins
+          });
+        }
 
         // Créer un Set des IDs de projets du client pour une recherche efficace
         const clientProjectIds = new Set(clientProjects.map(p => p.id));
@@ -178,11 +242,15 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
           return belongs;
         });
 
-        // Filtrer les user stories liées aux projets du client
+        // Créer un Set des IDs de sprints du client pour une recherche efficace
+        const clientSprintIds = new Set(clientSprints.map(s => s.id));
+
+        // Filtrer les user stories liées aux sprints du client
         const clientUserStories = userStoriesData.filter((story: UserStory) => {
-          const belongs = clientProjectIds.has(story.project);
-          console.log(`Story ${story.id} (${story.title}): project=${story.project}, belongs=${belongs}`);
-          return belongs;
+          // Les user stories sont liées aux sprints, pas directement aux projets
+          const belongsToClientSprint = story.sprint && clientSprintIds.has(story.sprint);
+          console.log(`Story ${story.id} (${story.title}): sprint=${story.sprint}, belongs=${belongsToClientSprint}`);
+          return belongsToClientSprint;
         });
 
         console.log('Filtered data:', {
@@ -195,6 +263,11 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
         setSprints(clientSprints);
         setUserStories(clientUserStories);
 
+        // Pre-select first sprint if available
+        if (clientSprints.length > 0 && !selectedSprintId) {
+          setSelectedSprintId(clientSprints[0].id);
+        }
+
         // Pre-select first user story if available
         if (clientUserStories.length > 0) {
           setSelectedUserStoryId(clientUserStories[0].id);
@@ -202,13 +275,17 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
 
         // Vérifier si aucune donnée n'a été trouvée
         if (clientProjects.length === 0) {
-          if (clientInfo.role !== 'ADMIN') {
-            setError('Aucun projet trouvé pour cet utilisateur.');
+          if (clientInfo.role === 'CLIENT') {
+            setError(`Aucun projet trouvé pour le client ID: ${clientInfo.id}. Vérifiez que des projets sont bien assignés à ce client dans la base de données.`);
+          } else if (clientInfo.role !== 'ADMIN') {
+            setError('Aucun projet disponible pour votre rôle.');
           } else {
             setError('Aucun projet disponible dans le système.');
           }
+        } else if (clientSprints.length === 0) {
+          setError('Aucun sprint trouvé dans vos projets. Veuillez créer des sprints pour pouvoir soumettre un feedback.');
         } else if (clientUserStories.length === 0) {
-          setError('Aucune user story trouvée pour cet utilisateur.');
+          setError('Aucune user story trouvée dans vos sprints. Veuillez créer des user stories dans vos sprints pour pouvoir soumettre un feedback.');
         }
 
       } catch (error) {
@@ -220,48 +297,31 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
     };
 
     loadData();
-  }, [clientInfo?.email]); // Utiliser email au lieu de id
+  }, [clientInfo?.id, clientData?.id]);
 
-  // Filter sprints based on selected deliverable
+  // Filter user stories based on selected sprint
   useEffect(() => {
-    if (selectedDeliverableType === 'project' && selectedDeliverableId) {
-      const filtered = sprints.filter(sprint => sprint.project === selectedDeliverableId);
-      setFilteredSprints(filtered);
-      console.log('Filtered sprints for project:', filtered);
-    } else {
-      setFilteredSprints(sprints);
-    }
-  }, [selectedDeliverableType, selectedDeliverableId, sprints]);
-
-  // Filter user stories based on selected deliverable
-  useEffect(() => {
-    let filtered: UserStory[] = [];
-    
-    if (selectedDeliverableType === 'project' && selectedDeliverableId) {
-      // Afficher les user stories du projet sélectionné
-      filtered = userStories.filter(story => story.project === selectedDeliverableId);
-      console.log('Filtered user stories for project:', filtered);
-    } else if (selectedDeliverableType === 'sprint' && selectedDeliverableId) {
-      // Afficher les user stories du sprint sélectionné
-      filtered = userStories.filter(story => story.sprint === selectedDeliverableId);
+    if (selectedSprintId) {
+      const filtered = userStories.filter(story => story.sprint === selectedSprintId);
+      setFilteredUserStories(filtered);
       console.log('Filtered user stories for sprint:', filtered);
-    } else {
-      // Afficher toutes les user stories du client
-      filtered = userStories;
-    }
-    
-    setFilteredUserStories(filtered);
-    
-    // Reset selected user story if it's not in the filtered list
-    if (selectedUserStoryId && filtered.length > 0) {
-      const isValidSelection = filtered.some(story => story.id === selectedUserStoryId);
-      if (!isValidSelection) {
-        setSelectedUserStoryId(filtered[0]?.id || '');
+      
+      // Reset selected user story if it's not in the filtered list
+      if (selectedUserStoryId && filtered.length > 0) {
+        const isValidSelection = filtered.some(story => story.id === selectedUserStoryId);
+        if (!isValidSelection) {
+          setSelectedUserStoryId(filtered[0]?.id || '');
+        }
+      } else if (filtered.length > 0) {
+        setSelectedUserStoryId(filtered[0].id);
+      } else {
+        setSelectedUserStoryId('');
       }
-    } else if (filtered.length === 0) {
+    } else {
+      setFilteredUserStories([]);
       setSelectedUserStoryId('');
     }
-  }, [selectedDeliverableType, selectedDeliverableId, sprints, userStories, selectedUserStoryId]);
+  }, [selectedSprintId, userStories, selectedUserStoryId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -277,7 +337,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
       return;
     }
 
-    if (!clientInfo?.email) {
+    if (!clientInfo?.id) {
       setError('Informations du client manquantes.');
       return;
     }
@@ -287,25 +347,35 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
       return;
     }
 
+    if (!selectedSprintId) {
+      setError('Veuillez sélectionner un Sprint.');
+      return;
+    }
+
     setIsSubmitting(true);
+    
+    // Utiliser l'ID client correct pour le feedback
+    const clientIdForFeedback = clientInfo.id; // ID user = ID client car Client hérite de User
     
     const feedbackData = {
       content: content.trim(),
       rating: rating,
-      deliverable_id: selectedDeliverableId || null,
+      deliverable_id: selectedSprintId,
       category,
       priority,
-      client: clientInfo.email, // Utiliser email au lieu de id
+      client: clientIdForFeedback, // Utiliser l'ID client correct
       userstory: selectedUserStoryId,
     };
 
     console.log('Submitting feedback:', feedbackData);
 
     try {
+      const accessToken = localStorage.getItem('access_token');
       const response = await fetch('http://127.0.0.1:8000/api/feedback/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify(feedbackData),
       });
@@ -316,8 +386,10 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
         setRating(null);
         setCategory('general');
         setPriority('medium');
-        setSelectedDeliverableId('');
-        setSelectedDeliverableType('project');
+        // Keep the first sprint selected
+        if (sprints.length > 0) {
+          setSelectedSprintId(sprints[0].id);
+        }
         // Keep the first user story selected
         if (userStories.length > 0) {
           setSelectedUserStoryId(userStories[0].id);
@@ -339,8 +411,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
 
   const selectedCategory = categories.find(cat => cat.value === category);
   const selectedPriority = priorities.find(pri => pri.value === priority);
-  const selectedProject = projects.find(p => p.id === selectedDeliverableId);
-  const selectedSprint = sprints.find(s => s.id === selectedDeliverableId);
+  const selectedSprint = sprints.find(s => s.id === selectedSprintId);
   const selectedUserStory = userStories.find(us => us.id === selectedUserStoryId);
 
   if (isLoading) {
@@ -394,7 +465,9 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
             <p className="text-blue-600 font-open-sans text-sm">{clientInfo.email}</p>
           )}
           <p className="text-blue-600 font-open-sans text-xs">
-            ID: {clientInfo.id} • {projects.length} projet(s) • {sprints.length} sprint(s) • {userStories.length} user story(s)
+            User ID: {clientInfo.id}
+            • Rôle: {clientInfo.role}
+            • {projects.length} projet(s) • {sprints.length} sprint(s) • {userStories.length} user story(s)
           </p>
         </div>
       </div>
@@ -408,92 +481,34 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
         </div>
         
         <div className="space-y-6">
-          {/* Deliverable Selection */}
+          {/* Sprint Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 font-open-sans mb-3">
-              Concernant quel élément ? 
+              Concernant quel sprint ? *
             </label>
             
-            {/* Deliverable Type Selection */}
-            <div className="flex space-x-2 mb-3">
-              {deliverableTypes.map((type) => {
-                const Icon = type.icon;
-                return (
-                  <button
-                    key={type.value}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDeliverableType(type.value as any);
-                      setSelectedDeliverableId('');
-                    }}
-                    className={`
-                      flex items-center space-x-2 px-3 py-2 rounded-lg border text-sm transition-all
-                      ${selectedDeliverableType === type.value 
-                        ? 'border-blue-500 bg-blue-50 text-blue-700' 
-                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                      }
-                    `}
-                  >
-                    <Icon size={16} />
-                    <span>{type.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Deliverable Selection */}
             <div className="relative">
               <select
-                value={selectedDeliverableId}
-                onChange={(e) => setSelectedDeliverableId(e.target.value)}
+                value={selectedSprintId}
+                onChange={(e) => setSelectedSprintId(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg font-open-sans focus:ring-2 focus:ring-primary focus:border-transparent appearance-none bg-white"
+                required
               >
-                <option value="">
-                  Sélectionner un {deliverableTypes.find(t => t.value === selectedDeliverableType)?.label.toLowerCase()}
-                </option>
-                {selectedDeliverableType === 'project' && projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-                {selectedDeliverableType === 'sprint' && filteredSprints.map((sprint) => (
-                  <option key={sprint.id} value={sprint.id}>
-                    {sprint.name} 
-                    {/* Afficher le projet parent pour plus de contexte */}
-                    {(() => {
-                      const parentProject = projects.find(p => p.id === sprint.project);
-                      return parentProject ? ` (${parentProject.name})` : '';
-                    })()}
-                  </option>
-                ))}
-                {selectedDeliverableType === 'userstory' && filteredUserStories.map((story) => (
-                  <option key={story.id} value={story.id}>
-                    {story.title}
-                    {/* Afficher le projet parent pour plus de contexte */}
-                    {(() => {
-                      const parentProject = projects.find(p => p.id === story.project);
-                      return parentProject ? ` (${parentProject.name})` : '';
-                    })()}
-                  </option>
-                ))}
+                <option value="">Sélectionner un sprint</option>
+                {sprints.map((sprint) => {
+                  const parentProject = projects.find(p => p.id === sprint.project);
+                  return (
+                    <option key={sprint.id} value={sprint.id}>
+                      {sprint.name} 
+                      {parentProject ? ` (${parentProject.name})` : ''}
+                    </option>
+                  );
+                })}
               </select>
               <ChevronDown className="absolute right-3 top-3 text-gray-400" size={20} />
             </div>
 
-            {/* Informations contextuelles */}
-            {selectedDeliverableType === 'project' && selectedDeliverableId && (
-              <div className="mt-2 p-3 bg-blue-50 rounded-lg">
-                <p className="text-sm text-blue-700 font-open-sans">
-                  <strong>Projet sélectionné:</strong> {selectedProject?.name}
-                  <br />
-                  <span className="text-blue-600">
-                    {filteredSprints.length} sprint(s) et {filteredUserStories.length} user story(s) disponibles
-                  </span>
-                </p>
-              </div>
-            )}
-            
-            {selectedDeliverableType === 'sprint' && selectedDeliverableId && (
+            {selectedSprintId && (
               <div className="mt-2 p-3 bg-green-50 rounded-lg">
                 <p className="text-sm text-green-700 font-open-sans">
                   <strong>Sprint sélectionné:</strong> {selectedSprint?.name}
@@ -517,31 +532,28 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
                 onChange={(e) => setSelectedUserStoryId(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg font-open-sans focus:ring-2 focus:ring-primary focus:border-transparent appearance-none bg-white"
                 required
+                disabled={!selectedSprintId}
               >
-                <option value="">Sélectionner une User Story</option>
+                <option value="">
+                  {selectedSprintId ? 'Sélectionner une User Story' : 'Sélectionnez d\'abord un sprint'}
+                </option>
                 {filteredUserStories.map((story) => {
-                  const parentProject = projects.find(p => p.id === story.project);
                   const parentSprint = story.sprint ? sprints.find(s => s.id === story.sprint) : null;
+                  const parentProject = parentSprint ? projects.find(p => p.id === parentSprint.project) : null;
                   
                   return (
                     <option key={story.id} value={story.id}>
                       {story.title}
                       {parentProject && ` (Projet: ${parentProject.name})`}
-                      {parentSprint && ` - Sprint: ${parentSprint.name}`}
                     </option>
                   );
                 })}
               </select>
               <ChevronDown className="absolute right-3 top-3 text-gray-400" size={20} />
             </div>
-            {filteredUserStories.length === 0 && (
+            {selectedSprintId && filteredUserStories.length === 0 && (
               <p className="text-sm text-amber-600 mt-2">
-                {selectedDeliverableType === 'sprint' 
-                  ? 'Aucune user story trouvée dans ce sprint.'
-                  : selectedDeliverableType === 'project'
-                  ? 'Aucune user story trouvée dans ce projet.'
-                  : 'Aucune user story disponible. Sélectionnez d\'abord un projet ou un sprint.'
-                }
+                Aucune user story trouvée dans ce sprint.
               </p>
             )}
           </div>
@@ -664,7 +676,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
           </div>
 
           {/* Summary */}
-          {content.length > 10 && selectedUserStory && (
+          {content.length > 10 && selectedUserStory && selectedSprint && (
             <div className="bg-gray-50 p-4 rounded-lg">
               <h4 className="font-open-sans font-medium text-secondary-2 mb-2 flex items-center">
                 <AlertCircle size={16} className="mr-2 text-gray-500" />
@@ -686,18 +698,11 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
                   )}
                 </div>
                 <div className="text-gray-600 font-open-sans">
+                  <strong>Sprint:</strong> {selectedSprint.name}
+                </div>
+                <div className="text-gray-600 font-open-sans">
                   <strong>User Story:</strong> {selectedUserStory.title}
                 </div>
-                {selectedProject && selectedDeliverableType === 'project' && (
-                  <div className="text-gray-600 font-open-sans">
-                    <strong>Projet:</strong> {selectedProject.name}
-                  </div>
-                )}
-                {selectedSprint && selectedDeliverableType === 'sprint' && (
-                  <div className="text-gray-600 font-open-sans">
-                    <strong>Sprint:</strong> {selectedSprint.name}
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -706,7 +711,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={!content.trim() || content.length < 10 || isSubmitting || !selectedUserStoryId}
+              disabled={!content.trim() || content.length < 10 || isSubmitting || !selectedUserStoryId || !selectedSprintId}
               className="flex items-center space-x-2 px-6 py-3 bg-button text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-open-sans font-medium"
             >
               {isSubmitting ? (

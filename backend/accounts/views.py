@@ -6,7 +6,10 @@ from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
 from .models import User
 from .serializers import RegisterUserSerializer, UserSerializer, UpdateUserSerializer
+import logging
+from rest_framework.permissions import IsAuthenticated
 
+logger = logging.getLogger(__name__)
 # 🔐 Login avec JWT
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -178,3 +181,41 @@ class DeleteUserView(APIView):
         return Response({
             "message": f"L'utilisateur avec l'email {email} a été supprimé avec succès ✅"
         }, status=200)
+
+class CurrentUserView(APIView):
+    """
+    Vue pour récupérer les informations de l'utilisateur connecté uniquement
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            logger.info(f"🔍 Récupération des infos pour l'utilisateur connecté: {user.email} (ID: {user.id})")
+            
+            user_data = {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "role": user.role,
+                "status": user.status,
+                "team": user.team,
+                "avatar": user.avatar,
+                "createdAt": user.created_at,
+                "lastLogin": user.last_login
+            }
+            
+            return Response({
+                "message": "Informations utilisateur récupérées avec succès ✅",
+                "user": user_data
+            })
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de la récupération des informations utilisateur: {e}")
+            return Response(
+                {
+                    "error": "Erreur lors de la récupération des informations utilisateur",
+                    "details": str(e)
+                }, 
+                status=500
+            )
