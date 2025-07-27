@@ -98,8 +98,8 @@ const Historique: React.FC = () => {
             
             // Trier par date décroissante (plus récent en premier)
             const sortedData = data.sort((a, b) => {
-                const dateA = new Date(a.timestamp);
-                const dateB = new Date(b.timestamp);
+                const dateA = new Date(a.created_at);
+                const dateB = new Date(b.created_at);
                 
                 // Si les dates sont invalides, les mettre à la fin
                 if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
@@ -235,18 +235,10 @@ const Historique: React.FC = () => {
                                 <p className="text-gray-700 leading-relaxed">{feedback.content}</p>
                             </div>
 
-                            {/* ID du livrable si disponible */}
-                            {feedback.deliverable_id && (
-                                <div className="mt-3 pt-3 border-t border-gray-100">
-                                    <span className="text-xs text-gray-500">
-                                        Livrable ID: {feedback.deliverable_id}
-                                    </span>
-                                </div>
-                            )}
-
+                           
                             {/* Debug: Afficher la valeur brute du timestamp */}
-                            <div className="mt-2 text-xs text-gray-400">
-                                {feedback.created_at}
+                            <div className="mt-2 text-xs text-gray-800">
+                            {formatDate(feedback.created_at)}
                             </div>
                         </div>
                     ))}

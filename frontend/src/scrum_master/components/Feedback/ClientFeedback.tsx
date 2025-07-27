@@ -121,7 +121,7 @@ const ClientFeedback: React.FC = () => {
             const validatedData = data.map(feedback => ({
                 ...feedback,
                 id: feedback.id || `feedback-${Date.now()}-${Math.random()}`,
-                author: feedback.author || 'Anonyme',
+                author: feedback.client?.name || 'Anonyme',
                 content: feedback.content || 'Pas de contenu',
                 rating: typeof feedback.rating === 'number' ? feedback.rating : 0,
                 timestamp: feedback.timestamp || new Date().toISOString(),
