@@ -12,7 +12,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SprintViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
     queryset = Sprint.objects.all()
     serializer_class = SprintSerializer
 

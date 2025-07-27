@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Clock, User, Target, Edit2, Trash2, Save, X } from 'lucide-react';
-import CreateImpedimentModal from './CreateImpedimentModal';
 
 interface Blocage {
   id: string;
@@ -18,6 +17,7 @@ interface Blocage {
     username: string;
     first_name?: string;
     last_name?: string;
+    name?: string;
   } | null;
 }
 
@@ -44,17 +44,35 @@ const ImpedimentList: React.FC<ImpedimentListProps> = ({
     status: 'pending'
   });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
+    // Récupérer les informations de l'utilisateur connecté
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        setCurrentUser(JSON.parse(userData));
+      } catch (error) {
+        console.error('Erreur lors du parsing des données utilisateur:', error);
+      }
+    }
+    
     fetchImpediments();
   }, []);
 
   const fetchImpediments = async () => {
     try {
       setIsLoading(true);
+      const token = localStorage.getItem('access_token');
+      
+      if (!token) {
+        setError('Token d\'authentification manquant');
+        return;
+      }
+
       const response = await fetch(`${apiBaseUrl}/blocages/`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -63,6 +81,8 @@ const ImpedimentList: React.FC<ImpedimentListProps> = ({
         const data = await response.json();
         console.log('Données reçues:', data); // Debug log
         setImpediments(data.results || data);
+      } else if (response.status === 401) {
+        setError('Session expirée. Veuillez vous reconnecter.');
       } else {
         setError('Erreur lors de la récupération des blocages');
       }
@@ -86,10 +106,17 @@ const ImpedimentList: React.FC<ImpedimentListProps> = ({
 
   const handleSaveEdit = async (impedimentId: string) => {
     try {
+      const token = localStorage.getItem('access_token');
+      
+      if (!token) {
+        setError('Token d\'authentification manquant');
+        return;
+      }
+
       const response = await fetch(`${apiBaseUrl}/blocages/${impedimentId}/`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(editForm),
@@ -102,6 +129,8 @@ const ImpedimentList: React.FC<ImpedimentListProps> = ({
         ));
         setEditingId(null);
         setEditForm({ title: '', description: '', severity: 'minor', status: 'pending' });
+      } else if (response.status === 401) {
+        setError('Session expirée. Veuillez vous reconnecter.');
       } else {
         setError('Erreur lors de la modification du blocage');
       }
@@ -118,10 +147,17 @@ const ImpedimentList: React.FC<ImpedimentListProps> = ({
 
   const handleDelete = async (impedimentId: string) => {
     try {
+      const token = localStorage.getItem('access_token');
+      
+      if (!token) {
+        setError('Token d\'authentification manquant');
+        return;
+      }
+
       const response = await fetch(`${apiBaseUrl}/blocages/${impedimentId}/`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -129,6 +165,8 @@ const ImpedimentList: React.FC<ImpedimentListProps> = ({
       if (response.ok) {
         setImpediments(impediments.filter(imp => imp.id !== impedimentId));
         setDeleteConfirm(null);
+      } else if (response.status === 401) {
+        setError('Session expirée. Veuillez vous reconnecter.');
       } else {
         setError('Erreur lors de la suppression du blocage');
       }
@@ -158,32 +196,26 @@ const ImpedimentList: React.FC<ImpedimentListProps> = ({
   // Fonction helper pour obtenir le nom d'affichage de l'utilisateur
   const getUserDisplayName = (reportedBy?: Blocage['reported_by']) => {
     if (reportedBy) {
+      if (reportedBy.name) {
+        return reportedBy.name;
+      }
       if (reportedBy.first_name && reportedBy.last_name) {
         return `${reportedBy.first_name} ${reportedBy.last_name}`;
       }
       return reportedBy.username;
     }
     
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      try {
-        const parsed = JSON.parse(userData);
-        return parsed.name || 'Utilisateur';
-      } catch (error) {
-        console.error('Erreur lors du parsing de user depuis localStorage', error);
-        return 'Utilisateur';
-      }
+    if (currentUser) {
+      return currentUser.name || currentUser.username || 'Utilisateur';
     }
+    
     return 'Utilisateur';
   };
-  const getReportedByDisplay = (reportedBy: any) => {
-    return reportedBy?.name || 'Utilisateur inconnu';
-  };
-  
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
@@ -207,16 +239,23 @@ const ImpedimentList: React.FC<ImpedimentListProps> = ({
       <div className="text-center py-12">
         <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun blocage</h3>
-        <p className="text-gray-500">Aucun blocage n'a été signalé pour le moment.</p>
+        <p className="text-gray-500">Vous n'avez signalé aucun blocage pour le moment.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-        Blocages ({impediments.length})
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          Mes Blocages ({impediments.length})
+        </h2>
+        {currentUser && (
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            Connecté en tant que: {getUserDisplayName()}
+          </div>
+        )}
+      </div>
       
       {impediments.map((impediment) => (
         <div key={impediment.id} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -365,7 +404,7 @@ const ImpedimentList: React.FC<ImpedimentListProps> = ({
                 {/* Utilisateur qui a rapporté */}
                 <div className="flex items-center">
                   <User className="w-4 h-4 mr-1" />
-                  <span>Rapporté par: {impediment.reported_by?.name}</span>
+                  <span>Rapporté par: {getUserDisplayName(impediment.reported_by)}</span>
                 </div>
 
                 {/* Tâche associée (si elle existe) */}

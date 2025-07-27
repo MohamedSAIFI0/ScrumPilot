@@ -3,7 +3,7 @@ import { Plus, Edit, Trash2, X, User, Calendar, Flag, Target } from 'lucide-reac
 
 // Types
 interface Epic {
-  id: number;
+  id: string;
   name: string;
   description: string;
   color: string;
@@ -651,31 +651,31 @@ const BacklogManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Sprint (optionnel)
-                  </label>
-                  <select
-                    value={formData.sprint || ''}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setFormData({ 
-                        ...formData, 
-                        sprint: value ? Number(value) : null 
-                      });
-                    }}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                  >
-                    <option value="">Aucun sprint</option>
-                    {sprints.map((sprint) => (
-                      <option key={sprint.id} value={sprint.id}>
-                        {sprint.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sprint 
+                </label>
+                <select
+                  value={formData.sprint === null ? '' : formData.sprint}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData({ 
+                      ...formData, 
+                      sprint: value === '' ? null : value
+                    });
+                  }}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value="">Aucun sprint</option>
+                  {sprints.map((sprint) => (
+                    <option key={sprint.id} value={sprint.id}>
+                      {sprint.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               </div>
 
-              {/* Product Owner */}
+  
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Assigné à 

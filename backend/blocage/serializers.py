@@ -8,9 +8,7 @@ from userstory.models import UserStory
 User = get_user_model()
 
 class BlocageSerializer(serializers.ModelSerializer):
-    # Pour l'écriture, on accepte les ID
-    # Votre User utilise un ID auto-incrémenté (IntegerField par défaut)
-    reported_by_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    # Pour l'écriture, on n'accepte plus reported_by_id car il sera automatiquement assigné
     # task_id reste CharField car UserStory semble utiliser des UUID
     task_id = serializers.CharField(write_only=True, required=False, allow_null=True)
     
@@ -21,42 +19,27 @@ class BlocageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Blocage
         fields = '__all__'
+        read_only_fields = ['reported_by', 'reported_at']  # Ces champs ne peuvent pas être modifiés
     
     def create(self, validated_data):
-        # Extraire les ID des champs write_only
-        reported_by_id = validated_data.pop('reported_by_id', None)
+        # Extraire l'ID de la tâche
         task_id = validated_data.pop('task_id', None)
         
-        # Récupérer les instances si les ID sont fournis
-        if reported_by_id:
-            try:
-                validated_data['reported_by'] = User.objects.get(id=reported_by_id)
-            except User.DoesNotExist:
-                raise serializers.ValidationError({"reported_by_id": "Utilisateur non trouvé"})
-        
+        # Récupérer l'instance de la tâche si l'ID est fourni
         if task_id:
             try:
                 validated_data['task'] = UserStory.objects.get(id=task_id)
             except UserStory.DoesNotExist:
                 raise serializers.ValidationError({"task_id": "User Story non trouvée"})
         
+        # reported_by sera assigné automatiquement par perform_create dans la vue
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
-        # Extraire les ID des champs write_only
-        reported_by_id = validated_data.pop('reported_by_id', None)
+        # Extraire l'ID de la tâche
         task_id = validated_data.pop('task_id', None)
         
-        # Mettre à jour les relations si les ID sont fournis
-        if reported_by_id is not None:
-            if reported_by_id:
-                try:
-                    validated_data['reported_by'] = User.objects.get(id=reported_by_id)
-                except User.DoesNotExist:
-                    raise serializers.ValidationError({"reported_by_id": "Utilisateur non trouvé"})
-            else:
-                validated_data['reported_by'] = None
-        
+        # Mettre à jour la relation de tâche si l'ID est fourni
         if task_id is not None:
             if task_id:
                 try:
@@ -65,5 +48,8 @@ class BlocageSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({"task_id": "User Story non trouvée"})
             else:
                 validated_data['task'] = None
+        
+        # S'assurer que reported_by ne peut pas être modifié
+        validated_data.pop('reported_by', None)
         
         return super().update(instance, validated_data)

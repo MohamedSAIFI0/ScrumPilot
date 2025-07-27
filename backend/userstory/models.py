@@ -61,9 +61,7 @@ class UserStory(models.Model):
     )
     sprint = models.ForeignKey(
         Sprint, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
+        on_delete=models.CASCADE, 
         related_name='userstories'
     )
     assignee = models.ManyToManyField(

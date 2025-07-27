@@ -9,16 +9,33 @@ import logging
 logger = logging.getLogger(__name__)
 
 class BlocageViewSet(viewsets.ModelViewSet):
-    queryset = Blocage.objects.all()
+    queryset = Blocage.objects.all()  # Queryset par défaut pour le router
     serializer_class = BlocageSerializer
+    permission_classes = [IsAuthenticated]  # S'assurer que l'utilisateur est authentifié
+
+    def get_queryset(self):
+        """
+        Filtrer les blocages selon le rôle de l'utilisateur :
+        - Scrum Master : voit tous les blocages
+        - Autres utilisateurs : voient seulement leurs propres blocages
+        """
+        user = self.request.user
+        
+        # Si l'utilisateur est un Scrum Master, il voit tous les blocages
+        if user.role == 'SM':
+            return Blocage.objects.all().order_by('-reported_at')
+        
+        # Sinon, l'utilisateur ne voit que ses propres blocages
+        return Blocage.objects.filter(reported_by=user).order_by('-reported_at')
 
     def perform_create(self, serializer):
         try:
-            blocage = serializer.save()  
-            logger.info(f"Blocage créé: {blocage.description}")
+            # Automatiquement assigner l'utilisateur connecté comme reported_by
+            blocage = serializer.save(reported_by=self.request.user)  
+            logger.info(f"Blocage créé par {self.request.user.username}: {blocage.description}")
             notify_scrum_masters(
                 title="🚨 Nouveau Blocage Signalé",
-                message=f"Un nouveau blocage a été signalé : {blocage.description}.",
+                message=f"Un nouveau blocage a été signalé par {self.request.user.username} : {blocage.description}.",
                 notification_type='warning'
             )
             print(f"✅ Notification envoyée aux Scrum Masters pour le blocage: {blocage.description}")
@@ -29,7 +46,7 @@ class BlocageViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         try:
             response = super().create(request, *args, **kwargs)
-            logger.info("Appel API création blocage réussi")
+            logger.info(f"Appel API création blocage réussi pour {request.user.username}")
             return response
         except Exception as e:
             logger.error(f"Erreur dans l'API création blocage: {e}")

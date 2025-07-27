@@ -97,7 +97,7 @@ const Dashboard: React.FC = () => {
       const [userStoriesRes, sprintsRes, blocagesRes, notificationsRes] = await Promise.all([
         fetch('http://127.0.0.1:8000/api/userstories/'),
         fetch('http://127.0.0.1:8000/api/sprints/', {headers}),
-        fetch('http://127.0.0.1:8000/api/blocages/'),
+        fetch('http://127.0.0.1:8000/api/blocages/', {headers}),
         fetch('http://127.0.0.1:8000/api/notifications/', {headers})
       ]);
 
