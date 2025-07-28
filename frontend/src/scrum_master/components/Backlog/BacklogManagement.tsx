@@ -3,18 +3,53 @@ import { Plus, Edit, Trash2, X, User, Calendar, Flag, Target } from 'lucide-reac
 
 // Types
 interface Epic {
-  id: string;
+  id: number;
   name: string;
   description: string;
   color: string;
   projet: number;
+  created_at: string;
+}
+
+interface Project {
+  id: number;
+  name: string;
+  description: string;
+  priority: string;
+  team: string;
+  members: number;
+  start_date: string;
+  end_date: string;
+  budget: string;
+  objectives: string[];
+  technologies: string[];
+  risks: string[];
+  status: string;
+  progress: number;
+  created_at: string;
+  created_by: string;
+  client: number;
+  product_owner: number | null;
+  scrum_master: number;
 }
 
 interface Sprint {
-  id: number;
+  id: string;
   name: string;
+  goal: string;
+  status: string;
   start_date: string;
   end_date: string;
+  duration: number;
+  capacity: number;
+  planning_ceremony: boolean;
+  daily_ceremony: boolean;
+  review_ceremony: boolean;
+  retrospective_ceremony: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: number;
+  project: Project;
 }
 
 interface UserStory {
@@ -24,8 +59,8 @@ interface UserStory {
   priority: 'high' | 'medium' | 'low';
   points: number;
   status: 'ready' | 'in_progress' | 'in_review' | 'testing' | 'done' | 'blocked';
-  epic: number;
-  sprint?: number | null;
+  epic: Epic; // Maintenant c'est l'objet Epic complet
+  sprint?: Sprint | null; // Maintenant c'est l'objet Sprint complet
   assignee: number[];
   created_at?: string;
   updated_at?: string;
@@ -38,7 +73,7 @@ interface UserStoryFormData {
   points: number;
   status: 'ready' | 'in_progress' | 'in_review' | 'testing' | 'done' | 'blocked';
   epic: number;
-  sprint: number | null;
+  sprint: string | null; // UUID string
   assignee: number[];
 }
 
@@ -98,13 +133,12 @@ const BacklogManagement: React.FC = () => {
   // Configuration API
   const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
-  // Fonction pour obtenir les headers avec token (simulé avec une variable)
+  // Fonction pour obtenir les headers avec token
   const getAuthHeaders = () => {
-    // Simuler un token - dans un vrai projet, vous utiliseriez localStorage ou un contexte
-    const token = localStorage.getItem('access_token'); // Remplacez par votre logique d'authentification
+    const token = localStorage.getItem('access_token');
     return {
       'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '',
+      'Authorization':  `Bearer ${token}` ,
     };
   };
 
@@ -141,7 +175,6 @@ const BacklogManagement: React.FC = () => {
     try {
       const headers = getAuthHeaders();
   
-      // Utiliser les mêmes headers pour toutes les requêtes
       const [epicsResponse, sprintsResponse, usersResponse, productOwnersResponse] = await Promise.all([
         fetch(`${API_BASE_URL}/epics/`, { headers }),
         fetch(`${API_BASE_URL}/sprints/`, { headers }),
@@ -161,6 +194,9 @@ const BacklogManagement: React.FC = () => {
         productOwnersResponse.json()
       ]);
 
+      console.log('Epics loaded:', epicsData);
+      console.log('Sprints loaded:', sprintsData);
+
       // Vérification et initialisation des données avec des valeurs par défaut
       setEpics(Array.isArray(epicsData) ? epicsData : []);
       setSprints(Array.isArray(sprintsData) ? sprintsData : []);
@@ -169,10 +205,12 @@ const BacklogManagement: React.FC = () => {
 
       // Sélectionner le premier epic par défaut
       if (Array.isArray(epicsData) && epicsData.length > 0) {
-        setSelectedEpic(epicsData[0].id);
-        setFormData(prev => ({ ...prev, epic: epicsData[0].id }));
+        const firstEpicId = epicsData[0].id;
+        setSelectedEpic(firstEpicId);
+        setFormData(prev => ({ ...prev, epic: firstEpicId }));
       }
     } catch (err) {
+      console.error('Error loading initial data:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
       // Initialiser avec des tableaux vides en cas d'erreur
       setEpics([]);
@@ -195,8 +233,10 @@ const BacklogManagement: React.FC = () => {
       if (!response.ok) throw new Error('Erreur lors du chargement des user stories');
       
       const data = await response.json();
+      console.log('User stories loaded:', data);
       setUserStories(Array.isArray(data) ? data : []);
     } catch (err) {
+      console.error('Error loading user stories:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
       setUserStories([]);
     } finally {
@@ -207,22 +247,46 @@ const BacklogManagement: React.FC = () => {
   const createUserStory = async () => {
     try {
       const headers = getAuthHeaders();
+      
+      // Validation côté client
+      if (!formData.epic || formData.epic === 0) {
+        setError('Veuillez sélectionner un epic valide');
+        return;
+      }
+
+      // Adapter les données pour l'API backend
+      const apiData = {
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        points: formData.points,
+        status: formData.status,
+        epic_id: formData.epic, // Envoyer epic_id au lieu de epic
+        sprint_id: formData.sprint, // Envoyer sprint_id au lieu de sprint
+        assignee: formData.assignee
+      };
+
+      console.log('Creating user story with data:', apiData);
+      
       const response = await fetch(`${API_BASE_URL}/userstories/`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(formData),
+        body: JSON.stringify(apiData),
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Erreur lors de la création de la user story');
+        const errorData = await response.json().catch(() => null);
+        console.error('Error response:', errorData);
+        throw new Error(errorData?.detail || errorData?.message || `Erreur ${response.status}`);
       }
       
       const newUserStory = await response.json();
+      console.log('User story created:', newUserStory);
       setUserStories([...userStories, newUserStory]);
       setSuccess('User Story créée avec succès!');
       closeModal();
     } catch (err) {
+      console.error('Error creating user story:', err);
       setError(err instanceof Error ? err.message : 'Erreur lors de la création');
     }
   };
@@ -232,22 +296,46 @@ const BacklogManagement: React.FC = () => {
     
     try {
       const headers = getAuthHeaders();
+      
+      // Validation côté client
+      if (!formData.epic || formData.epic === 0) {
+        setError('Veuillez sélectionner un epic valide');
+        return;
+      }
+
+      // Adapter les données pour l'API backend
+      const apiData = {
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        points: formData.points,
+        status: formData.status,
+        epic_id: formData.epic, // Envoyer epic_id au lieu de epic
+        sprint_id: formData.sprint, // Envoyer sprint_id au lieu de sprint
+        assignee: formData.assignee
+      };
+
+      console.log('Updating user story with data:', apiData);
+      
       const response = await fetch(`${API_BASE_URL}/userstories/${currentUserStory.id}/`, {
         method: 'PUT',
         headers,
-        body: JSON.stringify(formData),
+        body: JSON.stringify(apiData),
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Erreur lors de la mise à jour de la user story');
+        const errorData = await response.json().catch(() => null);
+        console.error('Error response:', errorData);
+        throw new Error(errorData?.detail || errorData?.message || `Erreur ${response.status}`);
       }
       
       const updatedUserStory = await response.json();
+      console.log('User story updated:', updatedUserStory);
       setUserStories(userStories.map(us => us.id === currentUserStory.id ? updatedUserStory : us));
       setSuccess('User Story mise à jour avec succès!');
       closeModal();
     } catch (err) {
+      console.error('Error updating user story:', err);
       setError(err instanceof Error ? err.message : 'Erreur lors de la mise à jour');
     }
   };
@@ -267,11 +355,14 @@ const BacklogManagement: React.FC = () => {
       setUserStories(userStories.filter(us => us.id !== id));
       setSuccess('User Story supprimée avec succès!');
     } catch (err) {
+      console.error('Error deleting user story:', err);
       setError(err instanceof Error ? err.message : 'Erreur lors de la suppression');
     }
   };
 
   const openModal = (userStory?: UserStory) => {
+    const epicId = userStory?.epic?.id || selectedEpic || 0;
+    
     setCurrentUserStory(userStory || null);
     setFormData({
       title: userStory?.title || '',
@@ -279,8 +370,8 @@ const BacklogManagement: React.FC = () => {
       priority: userStory?.priority || 'medium',
       points: userStory?.points || 1,
       status: userStory?.status || 'ready',
-      epic: userStory?.epic || selectedEpic || 0,
-      sprint: userStory?.sprint || null,
+      epic: epicId,
+      sprint: userStory?.sprint?.id || null,
       assignee: userStory?.assignee || []
     });
     setIsModalOpen(true);
@@ -307,10 +398,12 @@ const BacklogManagement: React.FC = () => {
       return;
     }
     
-    if (!formData.epic) {
+    if (!formData.epic || formData.epic === 0) {
       setError('Veuillez sélectionner un epic');
       return;
     }
+    
+    console.log('Submitting form data:', formData);
     
     if (currentUserStory) {
       updateUserStory();
@@ -332,15 +425,23 @@ const BacklogManagement: React.FC = () => {
     });
   };
 
-  const getEpicName = (epicId: number) => {
-    const epic = epics.find(e => e.id === epicId);
-    return epic?.name || 'Epic inconnu';
+  const getEpicName = (epic: Epic | number) => {
+    if (typeof epic === 'object' && epic !== null) {
+      return epic.name;
+    }
+    // Fallback pour les anciens formats
+    const foundEpic = epics.find(e => e.id === epic);
+    return foundEpic?.name || 'Epic inconnu';
   };
 
-  const getSprintName = (sprintId: number | null) => {
-    if (!sprintId) return 'Aucun sprint';
-    const sprint = sprints.find(s => s.id === sprintId);
-    return sprint?.name || 'Sprint inconnu';
+  const getSprintName = (sprint: Sprint | string | null) => {
+    if (!sprint) return 'Aucun sprint';
+    if (typeof sprint === 'object' && sprint !== null) {
+      return sprint.name;
+    }
+    // Fallback pour les anciens formats
+    const foundSprint = sprints.find(s => s.id === sprint);
+    return foundSprint?.name || 'Sprint inconnu';
   };
 
   const getUserNames = (userIds: number[]) => {
@@ -555,8 +656,14 @@ const BacklogManagement: React.FC = () => {
                   Epic *
                 </label>
                 <select
-                  value={formData.epic}
-                  onChange={(e) => setFormData({ ...formData, epic: Number(e.target.value) })}
+                  value={formData.epic || ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData({ 
+                      ...formData, 
+                      epic: value ? Number(value) : 0 
+                    });
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                   required
                 >
@@ -651,30 +758,30 @@ const BacklogManagement: React.FC = () => {
                 </div>
 
                 <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sprint 
-                </label>
-                <select
-                  value={formData.sprint === null ? '' : formData.sprint}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setFormData({ 
-                      ...formData, 
-                      sprint: value === '' ? null : value
-                    });
-                  }}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                >
-                  <option value="">Aucun sprint</option>
-                  {sprints.map((sprint) => (
-                    <option key={sprint.id} value={sprint.id}>
-                      {sprint.name}
-                    </option>
-                  ))}
-                </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Sprint 
+                  </label>
+                  <select
+                    value={formData.sprint || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData({ 
+                        ...formData, 
+                        sprint: value || null
+                      });
+                    }}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  >
+                    <option value="">Aucun sprint</option>
+                    {sprints.map((sprint) => (
+                      <option key={sprint.id} value={sprint.id}>
+                        {sprint.name}
+                        {sprint.project && ` (${sprint.project.name})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              </div>
-
   
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -709,6 +816,7 @@ const BacklogManagement: React.FC = () => {
                   type="button"
                   onClick={handleSubmit}
                   className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                  disabled={!formData.title.trim() || !formData.epic}
                 >
                   {currentUserStory ? 'Mettre à jour' : 'Créer User Story'}
                 </button>

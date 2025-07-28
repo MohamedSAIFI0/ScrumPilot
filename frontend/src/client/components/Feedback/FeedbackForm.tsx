@@ -2,18 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Star, Send, FileText, AlertCircle, CheckCircle, ChevronDown, User, Calendar, FileCheck } from 'lucide-react';
 
 interface Project {
-  id: string;
+  id: number;
   name: string;
   description?: string;
-  client: string; // ID du client (ForeignKey vers Client)
+  client: number;
 }
 
 interface Sprint {
   id: string;
   name: string;
   description?: string;
-  project: string;
-  project_id?: string;
+  project: Project;
+  project_id?: number;
 }
 
 interface UserStory {
@@ -21,20 +21,43 @@ interface UserStory {
   title: string;
   description?: string;
   project: string;
-  sprint?: string;
+  sprint: {  // Sprint est maintenant un objet complet
+    id: string;
+    name: string;
+    goal?: string;
+    status: string;
+    start_date: string;
+    end_date: string;
+    project: {
+      id: number;
+      name: string;
+      description?: string;
+      client: number;
+    };
+  };
+  priority: string;
+  points: number;
+  status: string;
+  epic?: {
+    id: number;
+    name: string;
+  };
+  assignee: number[];
+  created_at: string;
+  updated_at: string;
 }
 
 interface ClientInfo {
-  id: string; // ID du user
+  id: string;
   name: string;
   email: string;
   role: string;
 }
 
 interface Client {
-  id: string; // ID du client (différent de l'ID user)
+  id: string;
   name: string;
-  user_id?: string; // Lien vers User si nécessaire
+  user_id?: string;
 }
 
 interface FeedbackFormProps {
@@ -59,7 +82,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
   
   // Data state
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
-  const [clientData, setClientData] = useState<Client | null>(null); // Nouveau : données client séparées
+  const [clientData, setClientData] = useState<Client | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [userStories, setUserStories] = useState<UserStory[]>([]);
@@ -80,6 +103,33 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
     { value: 'high', label: 'Élevée', color: 'text-red-600 bg-red-100' }
   ];
 
+  // Helper function to find matching client
+  const findMatchingClient = async (userId: string): Promise<Client | null> => {
+    try {
+      const accessToken = localStorage.getItem('access_token');
+      const response = await fetch('http://127.0.0.1:8000/api/clients/', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      
+      if (response.ok) {
+        const clients = await response.json();
+        console.log('All clients for matching:', clients);
+        
+        // Chercher par user_id si disponible, sinon par correspondance d'ID
+        const matchingClient = clients.find((client: Client) => 
+          client.user_id === userId || 
+          String(client.id) === String(userId)
+        );
+        
+        console.log('Matching client found:', matchingClient);
+        return matchingClient;
+      }
+    } catch (error) {
+      console.error('Error finding matching client:', error);
+    }
+    return null;
+  };
+
   // Load client info from localStorage or API
   useEffect(() => {
     const loadClientInfo = async () => {
@@ -90,7 +140,6 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
           return;
         }
 
-        // Récupérer les infos de l'utilisateur connecté (pas tous les utilisateurs!)
         const userResponse = await fetch('http://127.0.0.1:8000/api/current-user/', {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -104,7 +153,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
         const response = await userResponse.json();
         console.log('Current user response:', response);
         
-        const userData = response.user; // Récupérer les données de l'utilisateur depuis response.user
+        const userData = response.user;
         
         if (!userData || !userData.id) {
           setError('ID de l\'utilisateur manquant dans la réponse API.');
@@ -114,41 +163,14 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
         console.log('Current user loaded:', userData);
         setClientInfo(userData);
 
-        // Si l'utilisateur est un client, récupérer ses données client
-        if (userData.role === 'CLIENT') {
-          try {
-            const clientResponse = await fetch('http://127.0.0.1:8000/api/clients/', {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-              },
-            });
-
-            if (clientResponse.ok) {
-              const clientsData = await clientResponse.json();
-              console.log('Clients data loaded:', clientsData);
-              
-              // Trouver le client correspondant à cet utilisateur
-              // Supposons que le modèle Client a un champ user_id ou similaire
-              const matchingClient = clientsData.find((client: Client) => {
-                // Vous devrez adapter cette logique selon votre structure de données
-                // Option 1: Si Client hérite de User, l'ID sera le même
-                return client.id === userData.id;
-                // Option 2: Si vous avez un champ user_id dans Client
-                // return client.user_id === userData.id;
-              });
-
-              if (matchingClient) {
-                setClientData(matchingClient);
-                console.log('Matching client found:', matchingClient);
-              } else {
-                console.warn('No matching client found for user:', userData.id);
-                setError('Aucune donnée client trouvée pour cet utilisateur.');
-              }
-            }
-          } catch (clientError) {
-            console.error('Error loading client data:', clientError);
-            // Ne pas arrêter le processus si les données client ne peuvent pas être chargées
-          }
+        // Pour tous les utilisateurs, essayer de trouver le client correspondant
+        const matchingClient = await findMatchingClient(userData.id);
+        if (matchingClient) {
+          setClientData(matchingClient);
+          console.log('Client data set:', matchingClient);
+        } else if (userData.role === 'CLIENT') {
+          console.warn('No matching client found for CLIENT user:', userData.id);
+          setError('Aucune donnée client trouvée pour cet utilisateur.');
         }
         
       } catch (error) {
@@ -178,14 +200,12 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
           'Authorization': `Bearer ${accessToken}`,
         };
         
-        // Charger toutes les données
         const [projectsRes, sprintsRes, userStoriesRes] = await Promise.all([
           fetch(`http://127.0.0.1:8000/api/projects/`, { headers }),
           fetch(`http://127.0.0.1:8000/api/sprints/`, { headers }),
           fetch(`http://127.0.0.1:8000/api/userstories/`, { headers })
         ]);
 
-        // Vérification des réponses
         if (!projectsRes.ok) {
           throw new Error(`Erreur lors du chargement des projets: ${projectsRes.status}`);
         }
@@ -206,51 +226,44 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
         console.log('Sprints loaded:', sprintsData);
         console.log('User Stories loaded:', userStoriesData);
 
-        // Filtrage correct basé sur le rôle et l'ID client
         let clientProjects: Project[] = [];
 
         if (clientInfo.role === 'ADMIN') {
           clientProjects = projectsData;
           console.log('Admin user - showing all projects');
         } else if (clientInfo.role === 'CLIENT') {
-          // Pour les clients, utiliser l'ID user car Client hérite de User (proxy=True)
-          const clientId = clientInfo.id; // ID user = ID client quand Client hérite de User
+          // Utiliser l'ID numérique du client si disponible
+          const clientIdToMatch = clientData?.id ? parseInt(clientData.id, 10) : parseInt(clientInfo.id, 10);
           
           clientProjects = projectsData.filter((project: Project) => {
-            // Convertir en string pour la comparaison car l'API peut retourner des types différents
-            const matches = String(project.client) === String(clientId);
-            console.log(`Project ${project.id} (${project.name}): client=${project.client}, current_client=${clientId}, matches=${matches}`);
+            const matches = project.client === clientIdToMatch;
+            console.log(`Project ${project.id} (${project.name}): client=${project.client}, current_client=${clientIdToMatch}, matches=${matches}`);
             return matches;
           });
           
-          console.log(`Client user (${clientId}) - filtered projects:`, clientProjects.length);
+          console.log(`Client user (${clientIdToMatch}) - filtered projects:`, clientProjects.length);
         } else {
-          // Pour les autres rôles (PO, SM, DEV), filtrer selon leurs attributions
           clientProjects = projectsData.filter((project: Project) => {
-            // Vous pouvez ajouter la logique pour PO, SM, DEV ici si nécessaire
-            // Par exemple, filtrer par product_owner, scrum_master, ou équipe
-            return true; // Temporaire - à adapter selon vos besoins
+            return true;
           });
         }
 
-        // Créer un Set des IDs de projets du client pour une recherche efficace
         const clientProjectIds = new Set(clientProjects.map(p => p.id));
         
-        // Filtrer les sprints liés aux projets du client
         const clientSprints = sprintsData.filter((sprint: Sprint) => {
-          const belongs = clientProjectIds.has(sprint.project);
-          console.log(`Sprint ${sprint.id} (${sprint.name}): project=${sprint.project}, belongs=${belongs}`);
+          const projectId = sprint.project?.id;
+          const belongs = clientProjectIds.has(projectId);
+          console.log(`Sprint ${sprint.id} (${sprint.name}): project_object_id=${projectId}, belongs=${belongs}`);
           return belongs;
         });
 
-        // Créer un Set des IDs de sprints du client pour une recherche efficace
         const clientSprintIds = new Set(clientSprints.map(s => s.id));
 
-        // Filtrer les user stories liées aux sprints du client
+        // Filtrage des user stories basé sur la nouvelle structure
         const clientUserStories = userStoriesData.filter((story: UserStory) => {
-          // Les user stories sont liées aux sprints, pas directement aux projets
-          const belongsToClientSprint = story.sprint && clientSprintIds.has(story.sprint);
-          console.log(`Story ${story.id} (${story.title}): sprint=${story.sprint}, belongs=${belongsToClientSprint}`);
+          const sprintId = story.sprint?.id;
+          const belongsToClientSprint = sprintId && clientSprintIds.has(sprintId);
+          console.log(`Story ${story.id} (${story.title}): sprint_id=${sprintId}, belongs=${belongsToClientSprint}`);
           return belongsToClientSprint;
         });
 
@@ -264,20 +277,17 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
         setSprints(clientSprints);
         setUserStories(clientUserStories);
 
-        // Pre-select first sprint if available
         if (clientSprints.length > 0 && !selectedSprintId) {
           setSelectedSprintId(clientSprints[0].id);
         }
 
-        // Pre-select first user story if available
         if (clientUserStories.length > 0) {
           setSelectedUserStoryId(clientUserStories[0].id);
         }
 
-        // Vérifier si aucune donnée n'a été trouvée
         if (clientProjects.length === 0) {
           if (clientInfo.role === 'CLIENT') {
-            setError(`Aucun projet trouvé pour le client ID: ${clientInfo.id}. Vérifiez que des projets sont bien assignés à ce client dans la base de données.`);
+            setError(`Aucun projet trouvé pour le client. Vérifiez que des projets sont bien assignés à ce client dans la base de données.`);
           } else if (clientInfo.role !== 'ADMIN') {
             setError('Aucun projet disponible pour votre rôle.');
           } else {
@@ -303,11 +313,10 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
   // Filter user stories based on selected sprint
   useEffect(() => {
     if (selectedSprintId) {
-      const filtered = userStories.filter(story => story.sprint === selectedSprintId);
+      const filtered = userStories.filter(story => story.sprint?.id === selectedSprintId);
       setFilteredUserStories(filtered);
       console.log('Filtered user stories for sprint:', filtered);
       
-      // Reset selected user story if it's not in the filtered list
       if (selectedUserStoryId && filtered.length > 0) {
         const isValidSelection = filtered.some(story => story.id === selectedUserStoryId);
         if (!isValidSelection) {
@@ -355,20 +364,65 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
 
     setIsSubmitting(true);
     
-    // Utiliser l'ID client correct pour le feedback
-    const clientIdForFeedback = clientInfo.id; // ID user = ID client car Client hérite de User
+    // LOGIQUE CORRIGÉE POUR DÉTERMINER L'ID CLIENT
+    let clientIdForFeedback: number;
     
+    console.log('=== DEBUG CLIENT ID RESOLUTION ===');
+    console.log('clientInfo:', clientInfo);
+    console.log('clientInfo.id:', clientInfo.id, typeof clientInfo.id);
+    console.log('clientData:', clientData);
+    console.log('clientData?.id:', clientData?.id, typeof clientData?.id);
+    
+    try {
+      if (clientInfo.role === 'CLIENT' && clientData?.id) {
+        // Pour les clients, utiliser l'ID du modèle Client
+        const parsedClientId = parseInt(clientData.id, 10);
+        if (isNaN(parsedClientId)) {
+          throw new Error('Client ID non convertible en nombre');
+        }
+        clientIdForFeedback = parsedClientId;
+        console.log('Using clientData.id:', clientIdForFeedback);
+      } else {
+        // Pour les admins ou si pas de clientData, essayer de convertir l'ID utilisateur
+        const parsedUserId = parseInt(clientInfo.id, 10);
+        if (!isNaN(parsedUserId)) {
+          clientIdForFeedback = parsedUserId;
+          console.log('Using converted clientInfo.id:', clientIdForFeedback);
+        } else {
+          // Si l'ID utilisateur n'est pas convertible, chercher dans la liste des clients
+          const matchingClient = await findMatchingClient(clientInfo.id);
+          if (matchingClient) {
+            const parsedMatchingId = parseInt(matchingClient.id, 10);
+            if (isNaN(parsedMatchingId)) {
+              throw new Error('ID client trouvé non convertible en nombre');
+            }
+            clientIdForFeedback = parsedMatchingId;
+            console.log('Using found matching client ID:', clientIdForFeedback);
+          } else {
+            throw new Error('Aucun client correspondant trouvé');
+          }
+        }
+      }
+    } catch (conversionError) {
+      console.error('Erreur résolution client ID:', conversionError);
+      setError('Impossible de déterminer l\'ID client. Veuillez contacter le support.');
+      setIsSubmitting(false);
+      return;
+    }
+
     const feedbackData = {
       content: content.trim(),
       rating: rating,
       deliverable_id: selectedSprintId,
       category,
       priority,
-      client: clientIdForFeedback, // Utiliser l'ID client correct
+      client: clientIdForFeedback,
       userstory: selectedUserStoryId,
     };
 
-    console.log('Submitting feedback:', feedbackData);
+    console.log('Final Client ID for feedback:', clientIdForFeedback, typeof clientIdForFeedback);
+    console.log('Submitting feedback data:', feedbackData);
+    console.log('==================================');
 
     try {
       const accessToken = localStorage.getItem('access_token');
@@ -382,16 +436,13 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
       });
 
       if (response.ok) {
-        // Reset form
         setContent('');
         setRating(null);
         setCategory('general');
         setPriority('medium');
-        // Keep the first sprint selected
         if (sprints.length > 0) {
           setSelectedSprintId(sprints[0].id);
         }
-        // Keep the first user story selected
         if (userStories.length > 0) {
           setSelectedUserStoryId(userStories[0].id);
         }
@@ -399,7 +450,8 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
         setTimeout(() => setShowSuccess(false), 5000);
       } else {
         const errorData = await response.json().catch(() => null);
-        const errorMessage = errorData?.message || errorData?.error || `Erreur ${response.status}: ${response.statusText}`;
+        console.error('Server error response:', errorData);
+        const errorMessage = errorData?.error || errorData?.message || `Erreur ${response.status}: ${response.statusText}`;
         setError(errorMessage);
       }
     } catch (error) {
@@ -466,9 +518,11 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
             <p className="text-blue-600 font-open-sans text-sm">{clientInfo.email}</p>
           )}
           <p className="text-blue-600 font-open-sans text-xs">
-            User ID: {clientInfo.id}
+            User ID: {clientInfo.id} ({typeof clientInfo.id})
             • Rôle: {clientInfo.role}
-            • {projects.length} projet(s) • {sprints.length} sprint(s) • {userStories.length} user story(s)
+            {clientData && ` • Client ID: ${clientData.id} (${typeof clientData.id})`}
+            <br />
+            {projects.length} projet(s) • {sprints.length} sprint(s) • {userStories.length} user story(s)
           </p>
         </div>
       </div>
@@ -497,7 +551,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
               >
                 <option value="">Sélectionner un sprint</option>
                 {sprints.map((sprint) => {
-                  const parentProject = projects.find(p => p.id === sprint.project);
+                  const parentProject = sprint.project;
                   return (
                     <option key={sprint.id} value={sprint.id}>
                       {sprint.name} 
@@ -539,8 +593,8 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
                   {selectedSprintId ? 'Sélectionner une User Story' : 'Sélectionnez d\'abord un sprint'}
                 </option>
                 {filteredUserStories.map((story) => {
-                  const parentSprint = story.sprint ? sprints.find(s => s.id === story.sprint) : null;
-                  const parentProject = parentSprint ? projects.find(p => p.id === parentSprint.project) : null;
+                  const parentSprint = story.sprint;
+                  const parentProject = parentSprint?.project;
                   
                   return (
                     <option key={story.id} value={story.id}>
@@ -713,7 +767,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ deliverableId }) => 
             <button
               type="submit"
               disabled={!content.trim() || content.length < 10 || isSubmitting || !selectedUserStoryId || !selectedSprintId}
-              className="flex items-center space-x-2 px-6 py-3 bg-button text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-open-sans font-medium"
+              className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-open-sans font-medium"
             >
               {isSubmitting ? (
                 <>

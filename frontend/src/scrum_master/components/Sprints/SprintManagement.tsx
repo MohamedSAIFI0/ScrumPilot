@@ -6,7 +6,7 @@ interface Project {
   id: number;
   name: string;
   description: string;
-  code: string;
+  code?: string;
 }
 
 interface Sprint {
@@ -14,7 +14,7 @@ interface Sprint {
   name: string;
   goal: string;
   status: string;
-  project: number;
+  project: Project | number; // Accepter soit un objet Project soit un ID
   start_date: string;
   end_date: string;
   duration: number;
@@ -40,7 +40,7 @@ interface SprintFormData {
   name: string;
   goal: string;
   status: string;
-  project_id: number; // Changé pour correspondre au serializer
+  project_id: number;
   start_date: string;
   end_date: string;
   duration: number;
@@ -80,7 +80,7 @@ const SprintManagement: React.FC = () => {
     name: '',
     goal: '',
     status: 'planned',
-    project_id: 0, // Changé de 'project' à 'project_id'
+    project_id: 0,
     start_date: '',
     end_date: '',
     duration: 14,
@@ -96,11 +96,37 @@ const SprintManagement: React.FC = () => {
 
   // Fonction pour obtenir les headers avec authentification
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('access_token');
+    // const token = localStorage.getItem('access_token');
     return {
       'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '',
+      // 'Authorization': token ? `Bearer ${token}` : '',
     };
+  };
+
+  // Fonctions helper pour gérer les projets
+  const getProjectName = (project: Project | number) => {
+    if (typeof project === 'object' && project !== null) {
+      return project.name;
+    }
+    // Si c'est un ID, chercher dans la liste des projets
+    const projectObj = projects.find(p => p.id === project);
+    return projectObj?.name || 'Projet inconnu';
+  };
+
+  const getProjectCode = (project: Project | number) => {
+    if (typeof project === 'object' && project !== null) {
+      return project.code || 'N/A';
+    }
+    // Si c'est un ID, chercher dans la liste des projets
+    const projectObj = projects.find(p => p.id === project);
+    return projectObj?.code || 'N/A';
+  };
+
+  const getProjectId = (project: Project | number): number => {
+    if (typeof project === 'object' && project !== null) {
+      return project.id;
+    }
+    return project;
   };
 
   // Chargement initial
@@ -151,7 +177,7 @@ const SprintManagement: React.FC = () => {
       // Sélectionner le premier projet par défaut
       if (data.length > 0) {
         setSelectedProject(data[0].id);
-        setFormData(prev => ({ ...prev, project_id: data[0].id })); // Changé
+        setFormData(prev => ({ ...prev, project_id: data[0].id }));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
@@ -188,7 +214,7 @@ const SprintManagement: React.FC = () => {
 
   const createSprint = async () => {
     try {
-      console.log('Données envoyées:', formData); // Debug
+      console.log('Données envoyées:', formData);
       const response = await fetch(`${API_BASE_URL}/sprints/`, {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -200,7 +226,7 @@ const SprintManagement: React.FC = () => {
           throw new Error('Session expirée. Veuillez vous reconnecter.');
         }
         const errorData = await response.json();
-        console.error('Erreur serveur:', errorData); // Debug
+        console.error('Erreur serveur:', errorData);
         throw new Error(errorData.detail || 'Erreur lors de la création du sprint');
       }
       
@@ -269,7 +295,7 @@ const SprintManagement: React.FC = () => {
       name: sprint?.name || '',
       goal: sprint?.goal || '',
       status: sprint?.status || 'planned',
-      project_id: sprint?.project || selectedProject || 0, // Changé
+      project_id: sprint ? getProjectId(sprint.project) : selectedProject || 0,
       start_date: sprint?.start_date || '',
       end_date: sprint?.end_date || '',
       duration: sprint?.duration || 14,
@@ -289,7 +315,7 @@ const SprintManagement: React.FC = () => {
       name: '',
       goal: '',
       status: 'planned',
-      project_id: selectedProject || 0, // Changé
+      project_id: selectedProject || 0,
       start_date: '',
       end_date: '',
       duration: 14,
@@ -322,7 +348,7 @@ const SprintManagement: React.FC = () => {
       return;
     }
     
-    if (!formData.project_id) { // Changé
+    if (!formData.project_id) {
       setError('Veuillez sélectionner un projet');
       return;
     }
@@ -336,7 +362,7 @@ const SprintManagement: React.FC = () => {
 
   const handleProjectChange = (projectId: number) => {
     setSelectedProject(projectId);
-    setFormData(prev => ({ ...prev, project_id: projectId })); // Changé
+    setFormData(prev => ({ ...prev, project_id: projectId }));
   };
 
   const formatDate = (dateString: string) => {
@@ -345,16 +371,6 @@ const SprintManagement: React.FC = () => {
       month: '2-digit',
       year: 'numeric'
     });
-  };
-
-  const getProjectName = (projectId: number) => {
-    const project = projects.find(p => p.id === projectId);
-    return project?.name || 'Projet inconnu';
-  };
-
-  const getProjectCode = (projectId: number) => {
-    const project = projects.find(p => p.id === projectId);
-    return project?.code || 'N/A';
   };
 
   const getStatusInfo = (status: string) => {
@@ -366,7 +382,7 @@ const SprintManagement: React.FC = () => {
   };
 
   // Simulation d'authentification pour le développement
-  const isAuthenticated = true; // Changé pour le test
+  const isAuthenticated = true;
 
   if (!isAuthenticated) {
     return (
@@ -593,15 +609,15 @@ const SprintManagement: React.FC = () => {
                   Projet *
                 </label>
                 <select
-                  value={formData.project_id} // Changé
-                  onChange={(e) => setFormData({ ...formData, project_id: Number(e.target.value) })} // Changé
+                  value={formData.project_id}
+                  onChange={(e) => setFormData({ ...formData, project_id: Number(e.target.value) })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                   required
                 >
                   <option value="">Sélectionner un projet</option>
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>
-                      {project.name} ({project.code})
+                      {project.name} {project.code && `(${project.code})`}
                     </option>
                   ))}
                 </select>

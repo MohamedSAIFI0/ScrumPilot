@@ -401,7 +401,7 @@ const MessagingInterface: React.FC = () => {
       setUsers(loadedUsers);
 
       // Définir l'utilisateur actuel (priorité à ADMIN)
-      const adminUser = loadedUsers.find((u: User) => u.role === 'ADMIN');
+      const adminUser = loadedUsers.find((u: User) => u.role === ''); //TestTest
       const currentUserData = adminUser || loadedUsers[0];
       setCurrentUser(currentUserData);
       console.log('✅ Utilisateur actuel défini:', currentUserData);

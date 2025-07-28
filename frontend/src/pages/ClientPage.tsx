@@ -102,7 +102,7 @@ function ClientPage() {
       case 'deliverables':
         return (
           <div className="space-y-6 lg:space-y-8">
-            <div className="grid grid-cols-1 xl:grid-cols-1 2xl:grid-cols-3 gap-6 lg:gap-10">
+            <div className="">
 
                 <ClientSprintsComponent/>
 

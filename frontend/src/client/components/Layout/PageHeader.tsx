@@ -6,7 +6,7 @@ interface PageHeaderProps {
   children?: React.ReactNode;
 }
 
-export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, children }) => {
+export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle }) => {
   return (
     <div className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
       <div className="max-w-full">
@@ -19,11 +19,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, childre
               {subtitle}
             </p>
           </div>
-          {children && (
-            <div className="flex-shrink-0">
-              {children}
-            </div>
-          )}
+       
         </div>
       </div>
     </div>

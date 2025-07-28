@@ -2,14 +2,14 @@ import logging
 from rest_framework import generics, status
 from rest_framework.response import Response
 from .models import Feedbacks
-from .serializers import FeedbackSerializer
+from .serializers import FeedbackCreateSerializer
 from notifications.utils import notify_scrum_masters
 
 logger = logging.getLogger(__name__)
 
 class FeedbackCreateView(generics.CreateAPIView):
     queryset = Feedbacks.objects.all()
-    serializer_class = FeedbackSerializer
+    serializer_class = FeedbackCreateSerializer
 
     def perform_create(self, serializer):
         try:
@@ -50,7 +50,7 @@ class FeedbackCreateView(generics.CreateAPIView):
 
 class FeedbackListView(generics.ListAPIView):
     queryset = Feedbacks.objects.all()
-    serializer_class = FeedbackSerializer
+    serializer_class = FeedbackCreateSerializer
 
     def get(self, request, *args, **kwargs):
         try:
