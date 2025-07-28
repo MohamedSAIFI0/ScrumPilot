@@ -5,7 +5,10 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  MessageSquare
+  MessageSquare,
+  UserCog,
+  UserCircle,
+  UserPlus
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -18,11 +21,11 @@ interface SidebarProps {
 const menuItems = [
   { id: 'dashboard', label: 'Tableau de bord', icon: BarChart3 },
   { id: 'users', label: 'Gestion utilisateurs', icon: Users },
-  { id: 'team', label: 'Creation equipes', icon: Users },
-  { id: 'teams', label: 'Gestion equipes', icon: Users },
+  { id: 'team', label: 'Création équipes', icon: UserPlus },
+  { id: 'teams', label: 'Gestion équipe', icon: UserCog },
   { id: 'messaging', label: 'Messagerie', icon: MessageSquare },
   { id: 'contact', label: 'Contact ', icon: MessageSquare },
-  { id: 'settings', label: 'Paramètres', icon: Settings },
+  { id: 'settings', label: 'Mon profil', icon: UserCircle },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ 

@@ -182,9 +182,11 @@ export default function Sidebar() {
   return (
     <div className={`fixed left-0 top-0 w-64 h-screen z-50 ${
       state.darkMode ? 'bg-dark-card' : 'bg-secondary-2'
-    } text-white font-poppins overflow-y-auto`}>
-      <div className="p-6">
-        <div className="flex items-center space-x-3 mb-8">
+    } text-white font-poppins flex flex-col`}>
+      
+      {/* Header Section - Fixed */}
+      <div className="flex-shrink-0 p-6 border-b border-gray-600">
+        <div className="flex items-center space-x-3">
           <img 
             src="logo.png" 
             alt="DXC Logo" 
@@ -197,42 +199,48 @@ export default function Sidebar() {
             </p>
           </div>
         </div>
-
-        <nav className="space-y-3">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = state.activeView === item.id;
-            const hasNotifications = (item.id === 'notifications' && state.unreadNotifications > 0) || 
-                                   (item.id === 'messages' && state.unreadMessages > 0);
-            
-            return (
-              <button
-                key={item.id}
-                onClick={() => dispatch({ type: 'SET_VIEW', payload: item.id })}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors font-open-sans ${
-                  isActive 
-                    ? 'bg-primary text-white' 
-                    : state.darkMode
-                      ? 'text-gray-300 hover:bg-gray-600 hover:text-white'
-                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.label}</span>
-                </div>
-                {hasNotifications && (
-                  <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {item.id === 'notifications' ? state.unreadNotifications : state.unreadMessages}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-gray-600">
+      {/* Navigation Section - Scrollable */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+        <div className="p-6">
+          <nav className="space-y-3">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = state.activeView === item.id;
+              const hasNotifications = (item.id === 'notifications' && state.unreadNotifications > 0) || 
+                                     (item.id === 'messages' && state.unreadMessages > 0);
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => dispatch({ type: 'SET_VIEW', payload: item.id })}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors font-open-sans ${
+                    isActive 
+                      ? 'bg-primary text-white' 
+                      : state.darkMode
+                        ? 'text-gray-300 hover:bg-gray-600 hover:text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <Icon className="w-5 h-5" />
+                    <span className="font-medium">{item.label}</span>
+                  </div>
+                  {hasNotifications && (
+                    <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      {item.id === 'notifications' ? state.unreadNotifications : state.unreadMessages}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      </div>
+
+      {/* User Section - Fixed at bottom */}
+      <div className="flex-shrink-0 p-6 border-t border-gray-600 bg-inherit">
         {renderUserSection()}
       </div>
     </div>

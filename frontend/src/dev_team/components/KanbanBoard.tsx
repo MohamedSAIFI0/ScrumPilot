@@ -14,7 +14,7 @@ interface UserStory {
   created_at: string;
   updated_at: string;
   epic: number;
-  sprint: number | null;
+  sprint: string | null;
   assignee: number[];
   comments?: Comment[];
 }
@@ -31,25 +31,47 @@ interface Comment {
   mentions: string[];
 }
 
-interface KanbanBoardProps {
-  currentUserId: number; // ID de l'utilisateur connecté
-  showAllTasks?: boolean; // Pour le debug
+interface User {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  team: string;
+  avatar: string;
+  createdAt: string;
+  lastLogin: string | null;
 }
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ currentUserId, showAllTasks = false }) => {
+interface KanbanBoardProps {
+  showAllTasks?: boolean;
+}
+
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ showAllTasks = false }) => {
   const [tasks, setTasks] = useState<UserStory[]>([]);
   const [allTasks, setAllTasks] = useState<UserStory[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [selectedTask, setSelectedTask] = useState<UserStory | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Mapping des statuts de l'API vers les colonnes du Kanban
-  const statusMapping: { [key: string]: string } = {
-    'todo': 'todo',
-    'in_progress': 'in_progress', 
+  // ✅ Mapping des statuts frontend vers backend
+  const frontendToBackendStatus: { [key: string]: string } = {
+    'todo': 'ready',
+    'in_progress': 'in_progress',
     'testing': 'testing',
     'done': 'done'
+  };
+
+  // ✅ Mapping des statuts backend vers frontend
+  const backendToFrontendStatus: { [key: string]: string } = {
+    'ready': 'todo',
+    'in_progress': 'in_progress',
+    'testing': 'testing',
+    'done': 'done',
+    'in_review': 'testing', // Mapper in_review vers testing pour l'UI
+    'blocked': 'todo' // Mapper blocked vers todo pour l'UI
   };
 
   const columns = [
@@ -59,48 +81,125 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ currentUserId, showAllTasks =
     { id: 'done', title: 'Terminé', status: 'done' as const }
   ];
 
-  // Charger les tâches depuis l'API
-  const fetchTasks = async () => {
+  const token = localStorage.getItem('access_token');
+
+  // ✅ Fonction utilitaire pour gérer les réponses API
+  const handleApiResponse = async (response: Response) => {
+    console.log('📡 Response status:', response.status);
+    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+    
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      console.log('📡 Content-Type:', contentType);
+      
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json();
+        console.error('❌ API Error (JSON):', errorData);
+        throw new Error(`Erreur API: ${response.status} - ${JSON.stringify(errorData)}`);
+      } else {
+        // Si ce n'est pas du JSON, c'est probablement du HTML (page d'erreur)
+        const htmlContent = await response.text();
+        console.error('❌ API Error (HTML):', htmlContent.substring(0, 200) + '...');
+        
+        if (response.status === 401) {
+          throw new Error('Token d\'authentification expiré ou invalide');
+        } else if (response.status === 404) {
+          throw new Error('Endpoint API introuvable');
+        } else if (response.status >= 500) {
+          throw new Error('Erreur serveur interne');
+        } else {
+          throw new Error(`Erreur HTTP ${response.status}: Le serveur a retourné du HTML au lieu de JSON`);
+        }
+      }
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const textContent = await response.text();
+      console.error('❌ Réponse non-JSON:', textContent.substring(0, 200) + '...');
+      throw new Error('Le serveur n\'a pas retourné de JSON valide');
+    }
+
+    return response.json();
+  };
+
+  // Récupérer l'utilisateur actuel
+  const fetchCurrentUser = async () => {
     try {
-      setLoading(true);
-      console.log('🔍 Fetching tasks for user:', currentUserId);
+      console.log('🔍 Fetching current user with token:', token ? 'Present' : 'Missing');
+      
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
+      }
+      
+      const response = await fetch('http://127.0.0.1:8000/api/current-user/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+      
+      const data = await handleApiResponse(response);
+      console.log('✅ Current user data:', data);
+      
+      setCurrentUser(data.user);
+      return data.user;
+    } catch (err) {
+      console.error('❌ Error fetching current user:', err);
+      throw err;
+    }
+  };
+
+  // Charger les tâches depuis l'API
+  const fetchTasks = async (userId: number) => {
+    try {
+      console.log('🔍 Fetching tasks for user:', userId);
+      console.log('🔍 Using token:', token ? 'Present' : 'Missing');
+      
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
+      }
       
       const response = await fetch('http://127.0.0.1:8000/api/userstories/', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         }
       });
       
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status} - ${response.statusText}`);
-      }
-
-      const data = await response.json();
+      const data = await handleApiResponse(response);
       console.log('📦 All tasks received:', data);
       console.log('📊 Total tasks count:', data.length);
       
+      // ✅ Mapper les statuts backend vers frontend
+      const mappedTasks = data.map((task: any) => ({
+        ...task,
+        status: backendToFrontendStatus[task.status] || task.status
+      }));
+
       // Afficher les détails de chaque tâche
-      data.forEach((task: UserStory, index: number) => {
+      mappedTasks.forEach((task: UserStory, index: number) => {
         console.log(`📋 Task ${index + 1}:`, {
           id: task.id,
           title: task.title,
           status: task.status,
           assignee: task.assignee,
-          isAssignedToUser: task.assignee.includes(currentUserId)
+          isAssignedToUser: task.assignee.includes(userId)
         });
       });
 
-      setAllTasks(data);
+      setAllTasks(mappedTasks);
       
       if (showAllTasks) {
         console.log('🌐 Showing ALL tasks (debug mode)');
-        setTasks(data);
+        setTasks(mappedTasks);
       } else {
         // Filtrer seulement les tâches assignées à l'utilisateur connecté
-        const userTasks = data.filter((task: UserStory) => {
-          const isAssigned = task.assignee.includes(currentUserId);
-          console.log(`🎯 Task "${task.title}" (ID: ${task.id}) - Assignees: [${task.assignee.join(', ')}] - Assigned to user ${currentUserId}: ${isAssigned ? '✅' : '❌'}`);
+        const userTasks = mappedTasks.filter((task: UserStory) => {
+          const isAssigned = task.assignee.includes(userId);
+          console.log(`🎯 Task "${task.title}" (ID: ${task.id}) - Assignees: [${task.assignee.join(', ')}] - Assigned to user ${userId}: ${isAssigned ? '✅' : '❌'}`);
           return isAssigned;
         });
 
@@ -113,14 +212,27 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ currentUserId, showAllTasks =
     } catch (err) {
       console.error('❌ Error fetching tasks:', err);
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
-    } finally {
-      setLoading(false);
     }
   };
 
+  // Initialiser les données
   useEffect(() => {
-    fetchTasks();
-  }, [currentUserId, showAllTasks]);
+    const initializeData = async () => {
+      try {
+        setLoading(true);
+        const user = await fetchCurrentUser();
+        if (user) {
+          await fetchTasks(user.id);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erreur lors du chargement');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeData();
+  }, [showAllTasks]);
 
   const getTasksByStatus = (status: string) => {
     const filteredTasks = tasks.filter(task => task.status === status);
@@ -128,41 +240,62 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ currentUserId, showAllTasks =
     return filteredTasks;
   };
 
-  // Mettre à jour le statut d'une tâche
-  const updateTaskStatus = async (taskId: number, newStatus: string) => {
+  // ✅ Mettre à jour le statut d'une tâche avec token et mapping
+  const updateTaskStatus = async (taskId: number, newFrontendStatus: string) => {
     try {
-      console.log(`🔄 Updating task ${taskId} to status: ${newStatus}`);
+      console.log(`🔄 Updating task ${taskId} to frontend status: ${newFrontendStatus}`);
+      
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
+      }
+      
+      // Mapper le statut frontend vers le statut backend
+      const backendStatus = frontendToBackendStatus[newFrontendStatus];
+      if (!backendStatus) {
+        throw new Error(`Statut frontend inconnu: ${newFrontendStatus}`);
+      }
+      
+      console.log(`📝 Mapped status: ${newFrontendStatus} -> ${backendStatus}`);
+      console.log('🔍 Using token:', token ? 'Present' : 'Missing');
       
       const response = await fetch(`http://127.0.0.1:8000/api/userstories/${taskId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, 
         },
         body: JSON.stringify({
-          status: newStatus,
+          status: backendStatus, // ✅ Utiliser le statut backend
           updated_at: new Date().toISOString()
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`Erreur lors de la mise à jour: ${response.status}`);
-      }
-
-      const updatedTask = await response.json();
+      const updatedTask = await handleApiResponse(response);
       console.log('✅ Task updated successfully:', updatedTask);
 
-      // Mettre à jour l'état local
+      // Mettre à jour l'état local avec le statut frontend
       setTasks(prevTasks => 
         prevTasks.map(task => 
           task.id === taskId 
-            ? { ...task, status: newStatus as any, updated_at: new Date().toISOString() }
+            ? { 
+                ...task, 
+                status: newFrontendStatus as any, // Garder le statut frontend pour l'UI
+                updated_at: new Date().toISOString() 
+              }
             : task
         )
       );
 
+      console.log(`✅ Tâche ${taskId} mise à jour vers "${newFrontendStatus}" (backend: "${backendStatus}")`);
+
     } catch (err) {
       console.error('❌ Error updating task:', err);
-      // Optionnel: afficher une notification d'erreur
+      setError(err instanceof Error ? err.message : 'Erreur lors de la mise à jour');
+      
+      // Recharger les tâches pour synchroniser l'état
+      if (currentUser) {
+        fetchTasks(currentUser.id);
+      }
     }
   };
 
@@ -189,35 +322,61 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ currentUserId, showAllTasks =
     setSelectedTask(null);
   };
 
+  // ✅ Fonction handleTaskUpdate corrigée
   const handleTaskUpdate = async (taskId: number, updates: Partial<UserStory>) => {
     try {
+      console.log('🔄 Updating task:', taskId, updates);
+      console.log('🔍 Using token:', token ? 'Present' : 'Missing');
+      
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
+      }
+      
+      // Préparer les données à envoyer
+      const dataToSend = { ...updates };
+      
+      // Mapper le statut si nécessaire
+      if (updates.status) {
+        const backendStatus = frontendToBackendStatus[updates.status];
+        if (backendStatus) {
+          dataToSend.status = backendStatus;
+          console.log(`📝 Status mapped: ${updates.status} -> ${backendStatus}`);
+        }
+      }
+
       const response = await fetch(`http://127.0.0.1:8000/api/userstories/${taskId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, // ✅ Token ajouté
         },
         body: JSON.stringify({
-          ...updates,
+          ...dataToSend,
           updated_at: new Date().toISOString()
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Erreur lors de la mise à jour');
-      }
+      const updatedTaskFromServer = await handleApiResponse(response);
+      console.log('✅ Task updated successfully:', updatedTaskFromServer);
 
-      // Mettre à jour l'état local
+      // Mettre à jour l'état local (garder les statuts frontend pour l'UI)
       setTasks(prevTasks => 
         prevTasks.map(task => 
           task.id === taskId 
-            ? { ...task, ...updates, updated_at: new Date().toISOString() }
+            ? { 
+                ...task, 
+                ...updates, // Utiliser les updates originaux (frontend) pour l'UI
+                updated_at: new Date().toISOString() 
+              }
             : task
         )
       );
 
+      console.log(`✅ Tâche ${taskId} mise à jour avec succès`);
       handleCloseModal();
     } catch (err) {
-      console.error('Erreur lors de la mise à jour:', err);
+      console.error('❌ Erreur lors de la mise à jour:', err);
+      setError(err instanceof Error ? err.message : 'Erreur lors de la mise à jour');
     }
   };
 
@@ -237,7 +396,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ currentUserId, showAllTasks =
         <div className="flex flex-col items-center justify-center h-64">
           <div className="text-lg text-red-600 mb-4">Erreur: {error}</div>
           <button 
-            onClick={fetchTasks}
+            onClick={() => {
+              if (currentUser) {
+                setLoading(true);
+                setError(null);
+                fetchTasks(currentUser.id).finally(() => setLoading(false));
+              }
+            }}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
             Réessayer
@@ -252,16 +417,20 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ currentUserId, showAllTasks =
       <div className="p-4 lg:p-6">
         <div className="mb-6">
           <h1 className="text-2xl lg:text-title font-poppins font-semibold text-secondary-2 dark:text-white mb-2">
-            {showAllTasks ? 'Toutes les Tâches (Debug)' : 'Mes Tâches'}
+            {showAllTasks ? 'Toutes les Tâches (Debug)' : `Mes Tâches - ${currentUser?.name || 'Utilisateur'}`}
           </h1>
           <p className="text-base lg:text-paragraph font-open-sans text-gray-600 dark:text-gray-300">
             Gérez vos tâches assignées avec le drag & drop
           </p>
           <div className="mt-2 text-sm text-gray-500 space-y-1">
-            <div>Total des tâches affichées: {tasks.length}</div>
-            <div>Total des tâches dans la DB: {allTasks.length}</div>
-            <div>Utilisateur ID: {currentUserId}</div>
-            <div>Mode debug: {showAllTasks ? 'Activé' : 'Désactivé'}</div>
+            {currentUser && (
+              <>
+                <div>Utilisateur: {currentUser.name}</div>
+                <div>Équipe: {currentUser.team}</div>
+                <div>Rôle: {currentUser.role}</div>
+                <div>Token: {token ? '✅ Présent' : '❌ Manquant'}</div>
+              </>
+            )}
           </div>
         </div>
 
@@ -303,6 +472,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ currentUserId, showAllTasks =
                                 <TaskCard 
                                   task={task} 
                                   onClick={() => handleTaskClick(task)}
+                                  currentUser={currentUser}
                                 />
                               </div>
                             )}
@@ -319,12 +489,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ currentUserId, showAllTasks =
         </DragDropContext>
       </div>
 
-      {selectedTask && (
+      {selectedTask && currentUser && (
         <TaskModal
           task={selectedTask}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
           onSave={handleTaskUpdate}
+          currentUser={currentUser}
         />
       )}
     </>

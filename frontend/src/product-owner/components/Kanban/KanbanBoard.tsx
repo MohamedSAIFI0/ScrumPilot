@@ -3,43 +3,75 @@ import { useScrum } from '../../contexts/ScrumContext';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import TaskCard from './TaskCard';
 
+interface Epic {
+  id: number;
+  name: string;
+  description: string;
+  color: string;
+  created_at: string;
+  projet: number;
+}
+
 interface Sprint {
   id: string;
   name: string;
+  goal: string;
   status: 'active' | 'completed' | 'planned' | 'cancelled';
   start_date: string;
   end_date: string;
-  description?: string;
-  user_stories: UserStory[];
+  duration: number;
+  capacity: number;
+  planning_ceremony: boolean;
+  daily_ceremony: boolean;
+  review_ceremony: boolean;
+  retrospective_ceremony: boolean;
+  created_at: string;
+  updated_at: string;
+  project: number;
+  created_by: number;
 }
 
 interface UserStory {
-  id: string;
+  id: number;
+  epic: Epic;
+  sprint: Sprint;
   title: string;
   description: string;
-  status: 'To Do' | 'In Progress' | 'Done';
-  priority: 'haute' | 'moyenne' | 'basse';
+  priority: 'high' | 'medium' | 'low';
   points: number;
-  tag: string;
-  assignee?: string;
-  comments: any[];
-  sprintId: string;
-  updatedAt: string;
-  createdAt: string;
+  status: 'ready' | 'in_progress' | 'in_review' | 'testing' | 'done' | 'blocked';
+  created_at: string;
+  updated_at: string;
+  assignee: number[];
 }
 
 export default function KanbanBoard() {
   const { state, dispatch } = useScrum();
-  const [sprints, setSprints] = useState<Sprint[]>([]);
   const [userStories, setUserStories] = useState<UserStory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSprintId, setSelectedSprintId] = useState<string>('');
 
+  // Mapping des statuts de l'API vers les colonnes du Kanban
   const columns = [
-    { id: 'To Do', title: 'À faire', color: 'bg-gray-100' },
-    { id: 'In Progress', title: 'En cours', color: 'bg-blue-100' },
-    { id: 'Done', title: 'Terminé', color: 'bg-green-100' }
+    { 
+      id: 'ready', 
+      title: 'À faire', 
+      color: 'bg-gray-100',
+      apiStatuses: ['ready'] 
+    },
+    { 
+      id: 'in_progress', 
+      title: 'En cours', 
+      color: 'bg-blue-100',
+      apiStatuses: ['in_progress', 'in_review'] 
+    },
+    { 
+      id: 'done', 
+      title: 'Terminé', 
+      color: 'bg-green-100',
+      apiStatuses: ['testing', 'done'] 
+    }
   ];
 
   // Fonction pour récupérer le token d'authentification
@@ -49,40 +81,6 @@ export default function KanbanBoard() {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     };
-  };
-
-  // Récupération des sprints depuis l'API
-  const fetchSprints = async () => {
-    try {
-      const response = await fetch('http://127.0.0.1:8000/api/sprints/', {
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Valider et normaliser les données des sprints
-      const validatedData = Array.isArray(data) ? data.map(sprint => ({
-        ...sprint,
-        user_stories: [] // Initialiser avec un tableau vide, sera rempli par fetchUserStories
-      })) : [];
-      
-      setSprints(validatedData);
-      
-      // Sélectionner automatiquement le sprint actif s'il existe
-      const activeSprint = validatedData.find((sprint: Sprint) => sprint.status === 'active');
-      if (activeSprint && !selectedSprintId) {
-        setSelectedSprintId(activeSprint.id);
-      }
-      
-      return validatedData;
-    } catch (err) {
-      console.error('Erreur lors de la récupération des sprints:', err);
-      throw err;
-    }
   };
 
   // Récupération des user stories depuis l'API
@@ -99,35 +97,25 @@ export default function KanbanBoard() {
       const data = await response.json();
       
       // Valider et normaliser les données des user stories
-      const validatedStories = Array.isArray(data) ? data.map(story => ({
-        id: story.id?.toString() || '',
-        title: story.title || 'Sans titre',
-        description: story.description || '',
-        status: story.status || 'To Do',
-        priority: story.priority || 'moyenne',
-        points: story.points || 0,
-        tag: story.tag || 'général',
-        assignee: story.assignee || '',
-        comments: Array.isArray(story.comments) ? story.comments : [],
-        sprintId: story.sprintId?.toString() || story.sprint_id?.toString() || '',
-        updatedAt: story.updatedAt || story.updated_at || new Date().toISOString(),
-        createdAt: story.createdAt || story.created_at || new Date().toISOString()
-      })) : [];
+      const validatedStories = Array.isArray(data) ? data : [];
       
       setUserStories(validatedStories);
+      
+      // Sélectionner automatiquement le premier sprint actif trouvé
+      if (validatedStories.length > 0 && !selectedSprintId) {
+        const activeSprint = validatedStories.find(story => 
+          story.sprint && story.sprint.status === 'active'
+        );
+        if (activeSprint) {
+          setSelectedSprintId(activeSprint.sprint.id);
+        }
+      }
+      
       return validatedStories;
     } catch (err) {
       console.error('Erreur lors de la récupération des user stories:', err);
       throw err;
     }
-  };
-
-  // Associer les user stories aux sprints
-  const associateUserStoriesToSprints = (sprintsData: Sprint[], storiesData: UserStory[]) => {
-    return sprintsData.map(sprint => ({
-      ...sprint,
-      user_stories: storiesData.filter(story => story.sprintId === sprint.id)
-    }));
   };
 
   // Récupération initiale des données
@@ -136,17 +124,7 @@ export default function KanbanBoard() {
       try {
         setLoading(true);
         setError(null);
-        
-        // Récupérer les sprints et user stories en parallèle
-        const [sprintsData, storiesData] = await Promise.all([
-          fetchSprints(),
-          fetchUserStories()
-        ]);
-        
-        // Associer les user stories aux sprints
-        const sprintsWithStories = associateUserStoriesToSprints(sprintsData, storiesData);
-        setSprints(sprintsWithStories);
-        
+        await fetchUserStories();
       } catch (err) {
         console.error('Erreur lors de la récupération des données:', err);
         setError(err instanceof Error ? err.message : 'Erreur inconnue');
@@ -161,12 +139,21 @@ export default function KanbanBoard() {
   // Mise à jour du statut d'une user story
   const updateUserStoryStatus = async (storyId: string, newStatus: string) => {
     try {
+      // Mapper le statut de la colonne vers le statut de l'API
+      let apiStatus = newStatus;
+      if (newStatus === 'ready') {
+        apiStatus = 'ready';
+      } else if (newStatus === 'in_progress') {
+        apiStatus = 'in_progress';
+      } else if (newStatus === 'done') {
+        apiStatus = 'done';
+      }
+
       const response = await fetch(`http://127.0.0.1:8000/api/userstories/${storyId}/`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          status: newStatus,
-          updated_at: new Date().toISOString() // Utiliser updated_at au lieu de updatedAt si c'est le format de l'API
+          status: apiStatus
         })
       });
 
@@ -179,22 +166,10 @@ export default function KanbanBoard() {
       // Mettre à jour l'état local des user stories
       setUserStories(prevStories => 
         prevStories.map(story => 
-          story.id === storyId 
-            ? { ...story, status: newStatus as 'To Do' | 'In Progress' | 'Done', updatedAt: new Date().toISOString() }
+          story.id.toString() === storyId 
+            ? { ...story, status: updatedStory.status, updated_at: updatedStory.updated_at }
             : story
         )
-      );
-
-      // Mettre à jour l'état local des sprints
-      setSprints(prevSprints => 
-        prevSprints.map(sprint => ({
-          ...sprint,
-          user_stories: sprint.user_stories ? sprint.user_stories.map(story => 
-            story.id === storyId 
-              ? { ...story, status: newStatus as 'To Do' | 'In Progress' | 'Done', updatedAt: new Date().toISOString() }
-              : story
-          ) : []
-        }))
       );
 
     } catch (err) {
@@ -218,29 +193,38 @@ export default function KanbanBoard() {
   };
 
   // Récupérer les stories par statut pour le sprint sélectionné
-  const getStoriesByStatus = (status: string) => {
-    const selectedSprint = sprints.find(s => s.id === selectedSprintId);
-    if (!selectedSprint || !selectedSprint.user_stories) return [];
+  const getStoriesByStatus = (columnId: string) => {
+    const column = columns.find(col => col.id === columnId);
+    if (!column) return [];
     
-    return selectedSprint.user_stories.filter(story => story.status === status);
+    return userStories.filter(story => 
+      story.sprint && 
+      story.sprint.id === selectedSprintId && 
+      column.apiStatuses.includes(story.status)
+    );
+  };
+
+  // Récupérer tous les sprints uniques
+  const getAllSprints = () => {
+    const sprintsMap = new Map();
+    userStories.forEach(story => {
+      if (story.sprint && !sprintsMap.has(story.sprint.id)) {
+        sprintsMap.set(story.sprint.id, story.sprint);
+      }
+    });
+    return Array.from(sprintsMap.values());
   };
 
   // Filtrer les sprints par statut
   const getSprintsByStatus = (status: string) => {
-    return sprints.filter(sprint => sprint.status === status);
+    return getAllSprints().filter(sprint => sprint.status === status);
   };
 
   // Fonction pour rafraîchir les données
   const refreshData = async () => {
     setLoading(true);
     try {
-      const [sprintsData, storiesData] = await Promise.all([
-        fetchSprints(),
-        fetchUserStories()
-      ]);
-      
-      const sprintsWithStories = associateUserStoriesToSprints(sprintsData, storiesData);
-      setSprints(sprintsWithStories);
+      await fetchUserStories();
       setError(null);
     } catch (err) {
       setError('Erreur lors du rafraîchissement des données');
@@ -249,10 +233,16 @@ export default function KanbanBoard() {
     }
   };
 
-  const selectedSprint = sprints.find(s => s.id === selectedSprintId);
+  // Obtenir les informations du sprint sélectionné
+  const selectedSprint = getAllSprints().find(s => s.id === selectedSprintId);
   const activeSprints = getSprintsByStatus('active');
   const completedSprints = getSprintsByStatus('completed');
   const plannedSprints = getSprintsByStatus('planned');
+
+  // Compter les user stories du sprint sélectionné
+  const selectedSprintStoriesCount = selectedSprint 
+    ? userStories.filter(story => story.sprint && story.sprint.id === selectedSprintId).length 
+    : 0;
 
   if (loading) {
     return (
@@ -261,7 +251,7 @@ export default function KanbanBoard() {
         <span className={`ml-2 font-open-sans ${
           state.darkMode ? 'text-dark-text' : 'text-secondary-2'
         }`}>
-          Chargement des sprints et user stories...
+          Chargement des user stories...
         </span>
       </div>
     );
@@ -338,31 +328,46 @@ export default function KanbanBoard() {
             
             {activeSprints.length > 0 && (
               <optgroup label="Sprints Actifs">
-                {activeSprints.map(sprint => (
-                  <option key={sprint.id} value={sprint.id}>
-                    🟢 {sprint.name} ({sprint.user_stories?.length || 0} stories)
-                  </option>
-                ))}
+                {activeSprints.map(sprint => {
+                  const storiesCount = userStories.filter(story => 
+                    story.sprint && story.sprint.id === sprint.id
+                  ).length;
+                  return (
+                    <option key={sprint.id} value={sprint.id}>
+                      🟢 {sprint.name} ({storiesCount} stories)
+                    </option>
+                  );
+                })}
               </optgroup>
             )}
             
             {plannedSprints.length > 0 && (
               <optgroup label="Sprints Planifiés">
-                {plannedSprints.map(sprint => (
-                  <option key={sprint.id} value={sprint.id}>
-                    🔵 {sprint.name} ({sprint.user_stories?.length || 0} stories)
-                  </option>
-                ))}
+                {plannedSprints.map(sprint => {
+                  const storiesCount = userStories.filter(story => 
+                    story.sprint && story.sprint.id === sprint.id
+                  ).length;
+                  return (
+                    <option key={sprint.id} value={sprint.id}>
+                      🔵 {sprint.name} ({storiesCount} stories)
+                    </option>
+                  );
+                })}
               </optgroup>
             )}
             
             {completedSprints.length > 0 && (
               <optgroup label="Sprints Terminés">
-                {completedSprints.map(sprint => (
-                  <option key={sprint.id} value={sprint.id}>
-                    ✅ {sprint.name} ({sprint.user_stories?.length || 0} stories)
-                  </option>
-                ))}
+                {completedSprints.map(sprint => {
+                  const storiesCount = userStories.filter(story => 
+                    story.sprint && story.sprint.id === sprint.id
+                  ).length;
+                  return (
+                    <option key={sprint.id} value={sprint.id}>
+                      ✅ {sprint.name} ({storiesCount} stories)
+                    </option>
+                  );
+                })}
               </optgroup>
             )}
           </select>
@@ -416,9 +421,7 @@ export default function KanbanBoard() {
         <div className={`p-3 rounded-lg ${
           state.darkMode ? 'bg-dark-card border border-gray-700' : 'bg-white border border-gray-100'
         }`}>
-          <p className="text-2xl font-bold text-primary">
-            {selectedSprint && selectedSprint.user_stories ? selectedSprint.user_stories.length : 0}
-          </p>
+          <p className="text-2xl font-bold text-primary">{selectedSprintStoriesCount}</p>
           <p className={`text-xs font-open-sans ${
             state.darkMode ? 'text-gray-400' : 'text-gray-600'
           }`}>User Stories</p>
@@ -472,7 +475,11 @@ export default function KanbanBoard() {
                           </div>
                         ) : (
                           stories.map((story, index) => (
-                            <Draggable key={story.id} draggableId={story.id} index={index}>
+                            <Draggable 
+                              key={story.id.toString()} 
+                              draggableId={story.id.toString()} 
+                              index={index}
+                            >
                               {(provided, snapshot) => (
                                 <div
                                   ref={provided.innerRef}
@@ -506,9 +513,9 @@ export default function KanbanBoard() {
           <div className="space-y-2">
             <p className="font-open-sans text-lg">Veuillez sélectionner un sprint pour afficher le tableau Kanban</p>
             <p className="font-open-sans text-sm">
-              {sprints.length === 0 
-                ? "Aucun sprint disponible. Créez d'abord un sprint."
-                : `${sprints.length} sprint(s) disponible(s)`
+              {getAllSprints().length === 0 
+                ? "Aucun sprint disponible. Créez d'abord un sprint avec des user stories."
+                : `${getAllSprints().length} sprint(s) disponible(s)`
               }
             </p>
           </div>

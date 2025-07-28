@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Activity, CheckCircle, Clock, TrendingUp, AlertTriangle, MessageSquare, UserCheck, RefreshCw } from 'lucide-react';
+import { Users, Activity, CheckCircle, Clock, TrendingUp, AlertTriangle, MessageSquare, UserCheck, RefreshCw, Bell } from 'lucide-react';
 import { apiService, DashboardStats } from '../../../services/apiService';
 
 const StatCard: React.FC<{
@@ -35,11 +35,19 @@ const StatCard: React.FC<{
   </div>
 );
 
-interface Activity {
-  user: string;
-  action: string;
-  time: string;
-  type: 'success' | 'info';
+interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  user?: {
+    id: number;
+    username: string;
+    first_name: string;
+    last_name: string;
+  };
+  created_at: string;
+  is_read: boolean;
 }
 
 export const Dashboard: React.FC = () => {
@@ -51,20 +59,49 @@ export const Dashboard: React.FC = () => {
     completedTasks: 0,
     pendingTasks: 0
   });
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [refreshing, setRefreshing] = useState(false);
 
+  
+
+  // Fonction pour récupérer les notifications récentes
+  const fetchRecentNotifications = async (): Promise<Notification[]> => {
+    const token = localStorage.getItem('access_token');
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+    }
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/notifications/',{headers});
+      if (!response.ok) {
+        throw new Error('Erreur lors de la récupération des notifications');
+      }
+      const data = await response.json();
+      
+      // Trier par date de création (plus récent en premier) et prendre les 5 premiers
+      const sortedNotifications = data
+        .sort((a: Notification, b: Notification) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+        .slice(0, 5);
+      
+      return sortedNotifications;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des notifications:', error);
+      return [];
+    }
+  };
+
   const loadDashboardData = async () => {
     try {
-      const [dashboardStats, recentActivities] = await Promise.all([
+      const [dashboardStats, recentNotifications] = await Promise.all([
         apiService.getDashboardStats(),
-        apiService.getRecentActivities()
+        fetchRecentNotifications()
       ]);
       
       setStats(dashboardStats);
-      setActivities(recentActivities);
+      setNotifications(recentNotifications);
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Erreur lors du chargement des données du dashboard:', error);
@@ -82,6 +119,54 @@ export const Dashboard: React.FC = () => {
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadDashboardData();
+  };
+
+  // Fonction pour formater le temps relatif
+  const formatRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'À l\'instant';
+    if (diffInMinutes < 60) return `Il y a ${diffInMinutes} min`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `Il y a ${diffInHours}h`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `Il y a ${diffInDays}j`;
+    
+    return date.toLocaleDateString('fr-FR');
+  };
+
+  // Fonction pour obtenir les couleurs selon le type de notification
+  const getNotificationStyle = (type: string) => {
+    switch (type) {
+      case 'success':
+        return {
+          bgColor: 'bg-green-100 dark:bg-green-900/30',
+          textColor: 'text-green-600 dark:text-green-400',
+          icon: CheckCircle
+        };
+      case 'warning':
+        return {
+          bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
+          textColor: 'text-yellow-600 dark:text-yellow-400',
+          icon: AlertTriangle
+        };
+      case 'error':
+        return {
+          bgColor: 'bg-red-100 dark:bg-red-900/30',
+          textColor: 'text-red-600 dark:text-red-400',
+          icon: AlertTriangle
+        };
+      default:
+        return {
+          bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+          textColor: 'text-blue-600 dark:text-blue-400',
+          icon: Bell
+        };
+    }
   };
 
   const getSystemAlerts = () => {
@@ -147,7 +232,6 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Grid */}
-      
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard
           title="Total utilisateurs"
@@ -197,47 +281,69 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
           <h3 className="font-poppins font-semibold text-lg text-secondary-2 dark:text-white mb-4">
-            Activité récente
+            Notifications récentes
           </h3>
           <div className="space-y-4">
             {loading ? (
               // Skeleton loading
-              Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="flex items-center space-x-3 p-3 rounded-lg animate-pulse">
+              Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="flex items-start space-x-3 p-3 rounded-lg animate-pulse">
                   <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
                   <div className="flex-1">
                     <div className="h-4 bg-gray-200 rounded w-3/4 mb-1"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2 mb-1"></div>
+                    <div className="h-2 bg-gray-200 rounded w-1/3"></div>
                   </div>
                 </div>
               ))
-            ) : activities.length > 0 ? (
-              activities.map((activity, index) => (
-                <div key={index} className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    activity.type === 'success' ? 'bg-green-100 dark:bg-green-900/30' : 'bg-primary'
-                  }`}>
-                    <span className={`text-sm font-medium ${
-                      activity.type === 'success' ? 'text-green-600 dark:text-green-400' : 'text-white'
-                    }`}>
-                      {activity.user.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                    </span>
+            ) : notifications.length > 0 ? (
+              notifications.map((notification) => {
+                const style = getNotificationStyle(notification.type);
+                const IconComponent = style.icon;
+                const userName = notification.user 
+                  ? `${notification.user.first_name} ${notification.user.last_name}`.trim() || notification.user.username
+                  : 'Système';
+
+                return (
+                  <div 
+                    key={notification.id} 
+                    className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                      !notification.is_read ? 'border-l-4 border-primary' : ''
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${style.bgColor}`}>
+                      <IconComponent size={16} className={style.textColor} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-secondary-2 dark:text-white font-open-sans">
+                            {notification.title}
+                          </p>
+                          <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
+                            {notification.message}
+                          </p>
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {userName}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {formatRelativeTime(notification.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                        {!notification.is_read && (
+                          <div className="w-2 h-2 bg-primary rounded-full ml-2 mt-1 flex-shrink-0"></div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-open-sans">
-                      <span className="font-medium text-secondary-2 dark:text-white">{activity.user}</span> 
-                      <span className="text-gray-600 dark:text-gray-300"> {activity.action}</span>
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{activity.time}</p>
-                  </div>
-                  {activity.type === 'success' && (
-                    <UserCheck size={16} className="text-green-500" />
-                  )}
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="text-center py-8 text-gray-500">
-                Aucune activité récente
+                <Bell size={48} className="mx-auto mb-2 text-gray-300" />
+                <p>Aucune notification récente</p>
               </div>
             )}
           </div>
