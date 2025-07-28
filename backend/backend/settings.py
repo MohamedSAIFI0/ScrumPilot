@@ -106,9 +106,9 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'dxc_scrum_ai_project_new',
-        'USER':'dxc_admin',
-        'PASSWORD':'dxc_pass_123',
+        'NAME': 'dxc_project',
+        'USER':'laila',
+        'PASSWORD':'laila123',
         'HOST':'localhost',
         'PORT':'5432',
     }
