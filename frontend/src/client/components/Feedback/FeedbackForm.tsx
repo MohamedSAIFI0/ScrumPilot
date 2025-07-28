@@ -13,6 +13,7 @@ interface Sprint {
   name: string;
   description?: string;
   project: string;
+  project_id?: string;
 }
 
 interface UserStory {

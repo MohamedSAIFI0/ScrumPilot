@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Bell, Search, Plus, Sun, Moon, MessageSquare } from 'lucide-react';
+import { Bell, Search, Plus, Sun, Moon, MessageSquare, LogOut } from 'lucide-react';
 import { useScrum } from '../../contexts/ScrumContext';
+import { logout } from '../../../services/apiLogin';
 // Import de votre composant NotificationDropdown
 import { NotificationDropdown } from '../../../scrum_master/components/Layout/NotificationDropDown';
 
@@ -24,6 +25,10 @@ export default function Header({ title, onAddClick, showAddButton = false }: Hea
 
   const handleCloseNotifications = () => {
     setShowNotifications(false);
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   return (
@@ -112,8 +117,22 @@ export default function Header({ title, onAddClick, showAddButton = false }: Hea
               <NotificationDropdown onClose={handleCloseNotifications} />
             )}
           </div>
+
+          {/* Bouton logout */}
+          <button
+            onClick={handleLogout}
+            className={`p-2 rounded-lg transition-colors ${
+              state.darkMode 
+                ? 'text-gray-300 hover:text-white hover:bg-gray-700' 
+                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+            }`}
+            title="Se déconnecter"
+          >
+            <LogOut className="w-6 h-6" />
+          </button>
         </div>
       </div>
     </header>
   );
 }
+

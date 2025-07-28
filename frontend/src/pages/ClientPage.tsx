@@ -3,10 +3,10 @@ import { Navbar } from '../client/components/Layout/Navbar';
 import { PageHeader } from '../client/components/Layout/PageHeader';
 import { ProjectProgress } from '../client/components/Overview/ProjectProgress';
 import { BurndownChart } from '../client/components/Charts/BurndownChart';
-import { DeliverableCard } from '../client/components/Deliverables/DeliverableCard';
 import { FeedbackForm } from '../client/components/Feedback/FeedbackForm';
 import { DocumentCard } from '../client/components/Documents/DocumentCard';
 import Historique from '../client/components/History/Historique';
+import ClientSprintsComponent from '../client/components/Deliverables/DeliverableCard';
 
 import { 
   mockProject, 
@@ -102,14 +102,10 @@ function ClientPage() {
       case 'deliverables':
         return (
           <div className="space-y-6 lg:space-y-8">
-            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 lg:gap-8">
-              {deliverables.map(deliverable => (
-                <DeliverableCard
-                  key={deliverable.id}
-                  deliverable={deliverable}
-                  onValidate={handleDeliverableValidation}
-                />
-              ))}
+            <div className="grid grid-cols-1 xl:grid-cols-1 2xl:grid-cols-3 gap-6 lg:gap-10">
+
+                <ClientSprintsComponent/>
+
             </div>
           </div>
         );
