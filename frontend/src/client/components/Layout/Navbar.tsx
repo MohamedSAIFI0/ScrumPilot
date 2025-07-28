@@ -3,13 +3,14 @@ import {
   BarChart3, 
   Package, 
   MessageSquare, 
-  FileText, 
   History,
   Bell,
   User,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { NotificationDropdown } from '../../../scrum_master/components/Layout/NotificationDropDown'; // Import du composant dropdown
+import { logout } from '../../../services/apiLogin';
 
 interface Notification {
   id: string;
@@ -35,7 +36,6 @@ const menuItems = [
   { id: 'overview', label: 'Dashboard', icon: BarChart3 },
   { id: 'deliverables', label: 'Livrables', icon: Package },
   { id: 'feedback', label: 'Feedback', icon: MessageSquare },
-  { id: 'documents', label: 'Documents', icon: FileText },
   { id: 'history', label: 'Historique', icon: History }
 ];
 
@@ -108,6 +108,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleCloseNotifications = () => {
     setShowNotifications(false);
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   // Fonction pour formater le nom d'affichage
@@ -201,6 +205,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <NotificationDropdown onClose={handleCloseNotifications} />
                 )}
               </div>
+
+              {/* Bouton logout */}
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                title="Se déconnecter"
+              >
+                <LogOut size={20} />
+              </button>
               
               {/* User Profile */}
               <div className="flex items-center space-x-3 pl-3 border-l border-gray-600">
